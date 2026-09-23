@@ -18,3 +18,13 @@ class MissingSafetyPrerequisiteError(DomainError):
 class UnapprovedDispatchError(DomainError):
     """An attempt to approve or dispatch a work order out of sequence.
     Binding principle 2: the human holds the pen."""
+
+
+class InvalidRunTransitionError(DomainError):
+    """An orchestration state transition the state machine does not
+    allow (ADR-0005) -- illegal jumps would break replay determinism."""
+
+
+class TamperedRunError(DomainError):
+    """A persisted RunStep's hash chain does not verify (ADR-0006) --
+    the audit log was edited after the fact."""

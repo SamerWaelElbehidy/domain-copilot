@@ -26,8 +26,6 @@ def test_every_corpus_document_ingests_cleanly(manual_path: Path):
     assert all(c.source_ref for c in chunks)
 
 
-def test_corpus_document_count_progress():
-    """Tracks progress toward the brief's >=30 document floor -- not
-    meant to pass yet; raises the bar as documents land."""
-    print(f"\nCorpus documents so far: {len(MANUAL_PATHS)} / 30 target")
-    assert len(MANUAL_PATHS) >= 1
+def test_corpus_meets_the_thirty_document_floor():
+    """FR: corpus >= 30 documents / 150+ pages (brief §2)."""
+    assert len(MANUAL_PATHS) >= 30

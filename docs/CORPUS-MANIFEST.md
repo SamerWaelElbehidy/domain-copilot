@@ -43,20 +43,16 @@ Use `equipment_id: eq-facility-general` in frontmatter.
 
 ## Status
 
-| Document | Status |
-|---|---|
-| eq-cnc-router-dwr2200 — Ops Manual Rev. C | ✅ done |
-| eq-drying-kiln-kdn500 — Ops Manual | ✅ done |
-| eq-laminating-press-hlp1200 — Ops Manual | ✅ done |
-| eq-spray-booth-sfb300 — Ops Manual | ✅ done |
-| eq-edge-bander-ebm150 — Ops Manual | ✅ done |
-| eq-dust-extraction-dcs800 — Ops Manual | ✅ done |
-| eq-air-compressor-iac100 — Ops Manual | ✅ done |
-| eq-cnc-router-dwr2200 — Ops Manual Rev. B (stale) | pending |
-| 7x LOTO / safety cards (one per equipment) | pending |
-| 7x Service bulletins (one per equipment) | pending |
-| 6x facility-wide policy documents | pending |
+| Document type | Count | Status |
+|---|---|---|
+| Equipment Ops & Maintenance Manuals (current) | 7 | ✅ done |
+| Equipment LOTO/safety cards | 7 | ✅ done |
+| Equipment service bulletins | 7 | ✅ done |
+| Stale/superseded revisions (CNC router Rev. B, DCS-800 Rev. 0) | 2 | ✅ done |
+| Facility-wide policy documents | 7 | ✅ done |
+| **Total** | **30** | ✅ **target met** |
 
-**Progress: 7 / 30 documents.** All 7 ingest cleanly (see
-`tests/integration/test_ingest_full_corpus.py`). This table is updated as
-documents land.
+All 30 documents ingest cleanly and are verified by
+`tests/integration/test_ingest_full_corpus.py`
+(`test_corpus_meets_the_thirty_document_floor` asserts the floor is met).
+Next: embed + index stages (ADR-0003/0004 adapters), then retrieval.

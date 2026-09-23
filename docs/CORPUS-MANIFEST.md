@@ -46,15 +46,17 @@ Use `equipment_id: eq-facility-general` in frontmatter.
 | Document | Status |
 |---|---|
 | eq-cnc-router-dwr2200 — Ops Manual Rev. C | ✅ done |
+| eq-drying-kiln-kdn500 — Ops Manual | ✅ done |
+| eq-laminating-press-hlp1200 — Ops Manual | ✅ done |
+| eq-spray-booth-sfb300 — Ops Manual | ✅ done |
+| eq-edge-bander-ebm150 — Ops Manual | ✅ done |
+| eq-dust-extraction-dcs800 — Ops Manual | ✅ done |
+| eq-air-compressor-iac100 — Ops Manual | ✅ done |
 | eq-cnc-router-dwr2200 — Ops Manual Rev. B (stale) | pending |
-| eq-cnc-router-dwr2200 — LOTO card | pending |
-| eq-cnc-router-dwr2200 — Service bulletin | pending |
-| eq-drying-kiln-kdn500 — Ops Manual | pending |
-| eq-laminating-press-hlp1200 — Ops Manual | pending |
-| eq-spray-booth-sfb300 — Ops Manual | pending |
-| eq-edge-bander-ebm150 — Ops Manual | pending |
-| eq-dust-extraction-dcs800 — Ops Manual | pending |
-| eq-air-compressor-iac100 — Ops Manual | pending |
-| (+ remaining LOTO cards / bulletins / facility-wide docs) | pending |
+| 7x LOTO / safety cards (one per equipment) | pending |
+| 7x Service bulletins (one per equipment) | pending |
+| 6x facility-wide policy documents | pending |
 
-This table is updated as documents land.
+**Progress: 7 / 30 documents.** All 7 ingest cleanly (see
+`tests/integration/test_ingest_full_corpus.py`). This table is updated as
+documents land.

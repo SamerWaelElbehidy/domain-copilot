@@ -11,5 +11,5 @@ async def create_pool() -> asyncpg.Pool:
         password=os.environ.get("POSTGRES_PASSWORD", "domain_copilot_dev"),
         database=os.environ.get("POSTGRES_DB", "domain_copilot"),
         host=os.environ.get("POSTGRES_HOST", "localhost"),
-        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+        port=int(os.environ.get("POSTGRES_PORT", "5433")),
     )

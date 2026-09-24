@@ -5,11 +5,13 @@ from typing import Any
 
 from application.ports.document_repository import DocumentRepository
 from application.ports.keyword_search_index import KeywordSearchIndex
+from application.ports.run_repository import RunRepository
 from application.ports.vector_store import ScoredChunk, VectorStore
 from application.ports.work_order_repository import WorkOrderRepository
 from domain.entities.chunk import Chunk
 from domain.entities.equipment import Equipment
 from domain.entities.manual_document import ManualDocument
+from domain.entities.run import Run
 from domain.entities.work_order import WorkOrder
 
 
@@ -130,3 +132,14 @@ class InMemoryWorkOrderRepository(WorkOrderRepository):
 
     async def get(self, work_order_id: str) -> WorkOrder | None:
         return self.work_orders.get(work_order_id)
+
+
+class InMemoryRunRepository(RunRepository):
+    def __init__(self) -> None:
+        self.runs: dict[str, Run] = {}
+
+    async def save(self, run: Run) -> None:
+        self.runs[run.run_id] = run
+
+    async def get(self, run_id: str) -> Run | None:
+        return self.runs.get(run_id)

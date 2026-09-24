@@ -3,6 +3,7 @@ equipment_id: eq-dust-extraction-dcs800
 equipment_name: Dust Extraction & Collection System
 document_id: doc-dust-extraction-dcs800-rev-0
 revision: Rev. 0
+status: superseded
 effective_date: 2024-06-01
 ---
 

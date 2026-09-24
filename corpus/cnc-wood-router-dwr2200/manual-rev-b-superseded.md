@@ -3,6 +3,7 @@ equipment_id: eq-cnc-router-dwr2200
 equipment_name: CNC Wood Router DWR-2200
 document_id: doc-cnc-router-dwr2200-rev-b
 revision: Rev. B
+status: superseded
 effective_date: 2025-02-10
 ---
 

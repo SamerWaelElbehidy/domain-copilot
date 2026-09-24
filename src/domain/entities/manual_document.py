@@ -13,3 +13,5 @@ class ManualDocument:
     revision: str
     effective_date: date
     title: str
+    doc_type: str = "manual"  # manual | loto | bulletin | policy
+    status: str = "current"  # current | superseded

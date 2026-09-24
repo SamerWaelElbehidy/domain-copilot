@@ -65,8 +65,12 @@ class PostgresKeywordSearchIndex(KeywordSearchIndex):
         for key, value in (filters or {}).items():
             if key not in _ALLOWED_FILTER_COLUMNS:
                 raise ValueError(f"Unsupported filter column: {key}")
-            params.append(value)
-            where_clauses.append(f"{key} = ${len(params)}")
+            if isinstance(value, (list, tuple, set)):
+                params.append(list(value))
+                where_clauses.append(f"{key} = ANY(${len(params)}::text[])")
+            else:
+                params.append(value)
+                where_clauses.append(f"{key} = ${len(params)}")
 
         params.append(top_k)
         sql = f"""

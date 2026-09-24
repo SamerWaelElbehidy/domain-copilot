@@ -73,6 +73,18 @@ class PostgresDocumentRepository(DocumentRepository):
         )
         return [_row_to_document(row) for row in rows]
 
+    async def set_ingestion_status(
+        self, document_id: str, status: str, error: str | None = None
+    ) -> None:
+        await self._pool.execute(
+            "UPDATE manual_documents SET ingestion_status = $2, ingestion_error = $3, "
+            "ingested_at = CASE WHEN $2 = 'ingested' THEN now() ELSE ingested_at END "
+            "WHERE document_id = $1",
+            document_id,
+            status,
+            error,
+        )
+
     async def list_current_document_ids(self, equipment_id: str | None = None) -> list[str]:
         if equipment_id is None:
             rows = await self._pool.fetch(

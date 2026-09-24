@@ -28,3 +28,18 @@ class InvalidRunTransitionError(DomainError):
 class TamperedRunError(DomainError):
     """A persisted RunStep's hash chain does not verify (ADR-0006) --
     the audit log was edited after the fact."""
+
+
+class ToolNotAllowedError(DomainError):
+    """An agent tried to call a tool outside its allow-list.
+    OWASP LLM Top 10: excessive agency."""
+
+
+class InvalidToolArgumentsError(DomainError):
+    """Tool arguments failed schema validation before execution.
+    OWASP LLM Top 10: insecure output handling."""
+
+
+class ApprovalRequiredError(DomainError):
+    """A side-effecting tool was invoked without a human approval token.
+    Binding principle 2: the human holds the pen."""

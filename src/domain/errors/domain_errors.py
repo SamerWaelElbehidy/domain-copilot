@@ -52,3 +52,12 @@ class InvalidToolArgumentsError(DomainError):
 class ApprovalRequiredError(DomainError):
     """A side-effecting tool was invoked without a human approval token.
     Binding principle 2: the human holds the pen."""
+
+
+class StepFailedError(DomainError):
+    """An orchestration step failed after exhausting its retries (FR-5)."""
+
+
+class InvalidReviewEditError(DomainError):
+    """A reviewer edit would weaken a work order (for example, drop a safety
+    step). Reviewers may add safety steps, never remove them."""

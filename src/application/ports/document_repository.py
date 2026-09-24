@@ -25,3 +25,9 @@ class DocumentRepository(ABC):
 
     @abstractmethod
     async def list_documents_for_equipment(self, equipment_id: str) -> list[ManualDocument]: ...
+
+    @abstractmethod
+    async def list_current_document_ids(self, equipment_id: str | None = None) -> list[str]:
+        """Ids of non-superseded documents. Every agent retrieval is
+        restricted to these, so stale revisions are never cited."""
+        ...

@@ -27,6 +27,14 @@ class DocumentRepository(ABC):
     async def list_documents_for_equipment(self, equipment_id: str) -> list[ManualDocument]: ...
 
     @abstractmethod
+    async def set_ingestion_status(
+        self, document_id: str, status: str, error: str | None = None
+    ) -> None:
+        """FR-1: per-document ingestion status ('ingested' or 'failed') with
+        the failure reason, queryable without touching the vector store."""
+        ...
+
+    @abstractmethod
     async def list_current_document_ids(self, equipment_id: str | None = None) -> list[str]:
         """Ids of non-superseded documents. Every agent retrieval is
         restricted to these, so stale revisions are never cited."""

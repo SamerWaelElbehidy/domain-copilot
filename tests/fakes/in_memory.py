@@ -96,6 +96,7 @@ class InMemoryDocumentRepository(DocumentRepository):
     def __init__(self) -> None:
         self.equipment: dict[str, Equipment] = {}
         self.documents: dict[str, ManualDocument] = {}
+        self.ingestion_status: dict[str, tuple[str, str | None]] = {}
 
     async def save_equipment(self, equipment: Equipment) -> None:
         self.equipment[equipment.equipment_id] = equipment
@@ -114,6 +115,11 @@ class InMemoryDocumentRepository(DocumentRepository):
             (d for d in self.documents.values() if d.equipment_id == equipment_id),
             key=lambda d: d.effective_date,
         )
+
+    async def set_ingestion_status(
+        self, document_id: str, status: str, error: str | None = None
+    ) -> None:
+        self.ingestion_status[document_id] = (status, error)
 
     async def list_current_document_ids(self, equipment_id: str | None = None) -> list[str]:
         return sorted(

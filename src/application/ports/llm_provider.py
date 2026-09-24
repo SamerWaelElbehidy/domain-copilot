@@ -56,7 +56,12 @@ class LLMProvider(ABC):
         self,
         messages: list[Message],
         tools: list[ToolDefinition] | None = None,
-    ) -> CompletionResult: ...
+        json_mode: bool = False,
+    ) -> CompletionResult:
+        """json_mode asks the provider to constrain output to valid JSON.
+        Callers still validate the result; this only makes small models
+        far less likely to answer in prose."""
+        ...
 
     @abstractmethod
     def stream(

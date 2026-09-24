@@ -255,9 +255,9 @@ def test_exhausted_retries_without_a_fallback_fail_the_run_visibly():
 
 
 class SlowLLM(FakeLLMProvider):
-    async def complete(self, messages, tools=None):
+    async def complete(self, messages, tools=None, json_mode=False):
         await asyncio.sleep(5)
-        return await super().complete(messages, tools)
+        return await super().complete(messages, tools, json_mode)
 
 
 def slow_world() -> World:

@@ -36,8 +36,11 @@ class OllamaProvider(LLMProvider):
         self,
         messages: list[Message],
         tools: list[ToolDefinition] | None = None,
+        json_mode: bool = False,
     ) -> CompletionResult:
         payload = self._build_chat_payload(messages, tools, stream=False)
+        if json_mode and not tools:
+            payload["format"] = "json"
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.post(f"{self._base_url}/api/chat", json=payload)
             response.raise_for_status()

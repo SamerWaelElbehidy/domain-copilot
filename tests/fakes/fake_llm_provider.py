@@ -30,6 +30,7 @@ class FakeLLMProvider(LLMProvider):
         self,
         messages: list[Message],
         tools: list[ToolDefinition] | None = None,
+        json_mode: bool = False,
     ) -> CompletionResult:
         self.received_messages.append(messages)
         if self._responses:

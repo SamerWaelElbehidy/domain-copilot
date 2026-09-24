@@ -124,7 +124,14 @@ def _payload_to_chunk(payload: dict) -> Chunk:
 def _build_filter(filters: dict[str, Any]) -> qmodels.Filter:
     return qmodels.Filter(
         must=[
-            qmodels.FieldCondition(key=key, match=qmodels.MatchValue(value=value))
+            qmodels.FieldCondition(
+                key=key,
+                match=(
+                    qmodels.MatchAny(any=list(value))
+                    if isinstance(value, (list, tuple, set))
+                    else qmodels.MatchValue(value=value)
+                ),
+            )
             for key, value in filters.items()
         ]
     )

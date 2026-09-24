@@ -117,6 +117,11 @@ def _message_to_dict(message: Message) -> dict:
         result["tool_call_id"] = message.tool_call_id
     if message.name:
         result["name"] = message.name
+    if message.tool_calls:
+        result["tool_calls"] = [
+            {"function": {"name": call.name, "arguments": call.arguments}}
+            for call in message.tool_calls
+        ]
     return result
 
 

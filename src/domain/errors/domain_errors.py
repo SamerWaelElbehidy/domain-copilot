@@ -30,6 +30,15 @@ class TamperedRunError(DomainError):
     the audit log was edited after the fact."""
 
 
+class AgentOutputError(DomainError):
+    """An agent's model output was not the typed JSON its contract requires."""
+
+
+class AgentIterationLimitError(DomainError):
+    """An agent hit its max-iteration breaker without producing a result
+    (FR-5: unbounded consumption control)."""
+
+
 class ToolNotAllowedError(DomainError):
     """An agent tried to call a tool outside its allow-list.
     OWASP LLM Top 10: excessive agency."""

@@ -7,11 +7,19 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class Message:
     role: str  # "system" | "user" | "assistant" | "tool"
     content: str
     tool_call_id: str | None = None
     name: str | None = None
+    tool_calls: tuple[ToolCall, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -19,13 +27,6 @@ class ToolDefinition:
     name: str
     description: str
     parameters: dict[str, Any]  # JSON schema, validated before execution (LLM Top 10)
-
-
-@dataclass(frozen=True)
-class ToolCall:
-    id: str
-    name: str
-    arguments: dict[str, Any]
 
 
 @dataclass(frozen=True)

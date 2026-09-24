@@ -24,7 +24,7 @@ def _doc_type(path: Path) -> str:
         return "policy"
     if path.name.startswith("loto"):
         return "loto"
-    if path.name.startswith("service-bulletin"):
+    if path.name.startswith(("service-bulletin", "memo")):
         return "bulletin"
     return "manual"
 

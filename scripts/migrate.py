@@ -1,6 +1,4 @@
-"""Applies migrations/*.sql in filename order, tracking what has already
-run in a schema_migrations table -- deliberately simple (no ORM) since
-this is the only place in the codebase that needs to touch raw SQL DDL.
+"""Applies migrations/*.sql to the configured Postgres.
 
 Usage: python scripts/migrate.py
 Reads POSTGRES_* from the environment (see .env.example).
@@ -10,11 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from pathlib import Path
 
-import asyncpg
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
+import asyncpg  # noqa: E402
+
+from infrastructure.persistence.migrations import apply_migrations  # noqa: E402
 
 
 async def main() -> None:
@@ -26,29 +27,10 @@ async def main() -> None:
         port=int(os.environ.get("POSTGRES_PORT", "5433")),
     )
     try:
-        await conn.execute(
-            "CREATE TABLE IF NOT EXISTS schema_migrations "
-            "(filename TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
-        )
-        applied = {
-            row["filename"]
-            for row in await conn.fetch("SELECT filename FROM schema_migrations")
-        }
-
-        for migration_file in sorted(MIGRATIONS_DIR.glob("*.sql")):
-            if migration_file.name in applied:
-                print(f"skip  {migration_file.name} (already applied)")
-                continue
-            sql = migration_file.read_text(encoding="utf-8")
-            async with conn.transaction():
-                await conn.execute(sql)
-                await conn.execute(
-                    "INSERT INTO schema_migrations (filename) VALUES ($1)",
-                    migration_file.name,
-                )
-            print(f"apply {migration_file.name}")
+        applied = await apply_migrations(conn)
     finally:
         await conn.close()
+    print("applied: " + (", ".join(applied) if applied else "nothing (already up to date)"))
 
 
 if __name__ == "__main__":

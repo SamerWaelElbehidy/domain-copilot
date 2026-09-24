@@ -24,6 +24,7 @@ class Answer:
     reason: str | None
     retrieved_chunk_ids: tuple[str, ...]
     top_dense_score: float
+    evidence: tuple[Chunk, ...] = ()
     input_tokens: int = 0
     output_tokens: int = 0
     model: str = ""
@@ -44,7 +45,9 @@ def _sanitize(text: str) -> str:
 
 
 def _refuse(reason: str, chunks: list[Chunk], top: float, **usage) -> Answer:
-    return Answer("refused", "", (), reason, tuple(c.chunk_id for c in chunks), top, **usage)
+    return Answer(
+        "refused", "", (), reason, tuple(c.chunk_id for c in chunks), top, tuple(chunks), **usage
+    )
 
 
 class GroundedAnswerer:
@@ -100,7 +103,8 @@ class GroundedAnswerer:
             [
                 Message(role="system", content=self._system_prompt),
                 Message(role="user", content=f"Question: {question}\n\nExcerpts:\n{evidence}"),
-            ]
+            ],
+            json_mode=True,
         )
         usage = {
             "input_tokens": completion.input_tokens,
@@ -137,5 +141,5 @@ class GroundedAnswerer:
         )
         return Answer(
             "answered", text.strip(), citations, None,
-            tuple(c.chunk_id for c in chunks), top, **usage,
+            tuple(c.chunk_id for c in chunks), top, tuple(chunks), **usage,
         )

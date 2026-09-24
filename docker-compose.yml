@@ -1,6 +1,6 @@
 services:
   qdrant:
-    image: qdrant/qdrant:v1.12.4
+    image: qdrant/qdrant:v1.19.1
     ports:
       - "6333:6333"
     volumes:
@@ -18,7 +18,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-domain_copilot_dev}
       POSTGRES_DB: ${POSTGRES_DB:-domain_copilot}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

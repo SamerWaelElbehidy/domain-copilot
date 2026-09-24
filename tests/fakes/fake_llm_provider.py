@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import zlib
 from collections.abc import AsyncIterator
 
 from application.ports.llm_provider import (
@@ -45,4 +47,12 @@ class FakeLLMProvider(LLMProvider):
         yield StreamEvent(kind="done")
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[float(len(t) % 7)] * self._embedding_dim for t in texts]
+        """Hashed bag-of-words: deterministic, and texts sharing words get
+        similar vectors, so retrieval order in tests is meaningful."""
+        vectors = []
+        for text in texts:
+            vector = [0.0] * self._embedding_dim
+            for token in re.findall(r"[a-z0-9]+", text.lower()):
+                vector[zlib.crc32(token.encode()) % self._embedding_dim] += 1.0
+            vectors.append(vector)
+        return vectors

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from application.ports.keyword_search_index import KeywordSearchIndex
@@ -9,7 +10,15 @@ from domain.entities.chunk import Chunk
 RRF_K = 60
 
 
-async def hybrid_search(
+@dataclass(frozen=True)
+class HybridResult:
+    chunks: list[Chunk]
+    # Best dense (cosine) similarity among candidates. RRF only keeps rank
+    # order, so this is the signal used to decide there is no real evidence.
+    top_dense_score: float
+
+
+async def hybrid_search_detailed(
     *,
     vector_store: VectorStore,
     keyword_index: KeywordSearchIndex,
@@ -17,7 +26,7 @@ async def hybrid_search(
     query_text: str,
     top_k: int,
     filters: dict[str, Any] | None = None,
-) -> list[Chunk]:
+) -> HybridResult:
     """Fuses dense + keyword results via Reciprocal Rank Fusion (ADR-0004):
     each chunk's fused score is the sum of 1/(RRF_K + rank) over every
     ranker it appears in -- rank order only, so cosine similarity and
@@ -35,4 +44,27 @@ async def hybrid_search(
             chunks_by_id[chunk_id] = scored.chunk
 
     ranked_ids = sorted(fused_scores, key=lambda cid: fused_scores[cid], reverse=True)
-    return [chunks_by_id[chunk_id] for chunk_id in ranked_ids[:top_k]]
+    return HybridResult(
+        chunks=[chunks_by_id[chunk_id] for chunk_id in ranked_ids[:top_k]],
+        top_dense_score=max((s.score for s in dense_results), default=0.0),
+    )
+
+
+async def hybrid_search(
+    *,
+    vector_store: VectorStore,
+    keyword_index: KeywordSearchIndex,
+    query_embedding: list[float],
+    query_text: str,
+    top_k: int,
+    filters: dict[str, Any] | None = None,
+) -> list[Chunk]:
+    result = await hybrid_search_detailed(
+        vector_store=vector_store,
+        keyword_index=keyword_index,
+        query_embedding=query_embedding,
+        query_text=query_text,
+        top_k=top_k,
+        filters=filters,
+    )
+    return result.chunks

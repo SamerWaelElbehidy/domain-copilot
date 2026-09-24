@@ -17,7 +17,7 @@ from application.ports.keyword_search_index import KeywordSearchIndex
 from application.ports.llm_provider import LLMProvider, ToolDefinition
 from application.ports.vector_store import VectorStore
 from application.ports.work_order_repository import WorkOrderRepository
-from application.use_cases.hybrid_search import hybrid_search
+from application.use_cases.scoped_search import scoped_search
 from domain.entities.chunk import Chunk
 from domain.entities.work_order import WorkOrder
 from domain.errors.domain_errors import InvalidToolArgumentsError
@@ -60,23 +60,17 @@ def build_tool_registry(
     async def _search(
         query: str, equipment_id: str | None, section_type: str | None, top_k: int
     ) -> list[Chunk]:
-        current_ids = await document_repository.list_current_document_ids(equipment_id)
-        if not current_ids:
-            return []
-        filters: dict[str, Any] = {"document_id": current_ids}
-        if equipment_id:
-            filters["equipment_id"] = equipment_id
-        if section_type:
-            filters["section_type"] = section_type
-        embedding = (await llm_provider.embed([query]))[0]
-        return await hybrid_search(
+        result = await scoped_search(
+            llm_provider=llm_provider,
             vector_store=vector_store,
             keyword_index=keyword_index,
-            query_embedding=embedding,
-            query_text=query,
+            document_repository=document_repository,
+            query=query,
+            equipment_id=equipment_id,
+            section_type=section_type,
             top_k=top_k,
-            filters=filters,
         )
+        return result.chunks
 
     async def search_manual_chunks(args: dict[str, Any]) -> dict[str, Any]:
         chunks = await _search(

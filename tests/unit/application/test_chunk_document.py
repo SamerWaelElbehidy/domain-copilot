@@ -89,4 +89,6 @@ def test_unrecognized_heading_raises_instead_of_silently_dropping_content():
     body = "## Some Unplanned Section\n\nContent nobody classified.\n"
 
     with pytest.raises(UnknownSectionHeadingError):
-        chunk_document(document_id="doc-1", equipment_id="eq-1", manual_revision="Rev. A", body=body)
+        chunk_document(
+            document_id="doc-1", equipment_id="eq-1", manual_revision="Rev. A", body=body
+        )

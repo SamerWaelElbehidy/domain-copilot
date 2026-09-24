@@ -38,7 +38,8 @@ class PostgresDocumentRepository(DocumentRepository):
     async def save_document(self, document: ManualDocument) -> None:
         await self._pool.execute(
             """
-            INSERT INTO manual_documents (document_id, equipment_id, revision, effective_date, title)
+            INSERT INTO manual_documents
+                (document_id, equipment_id, revision, effective_date, title)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (document_id) DO UPDATE SET
                 revision = EXCLUDED.revision,

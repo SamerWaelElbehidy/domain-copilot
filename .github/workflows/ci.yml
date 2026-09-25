@@ -14,18 +14,19 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt ruff pip-audit
+      - run: pip install -r requirements-dev.txt ruff pip-audit
       - name: Build validation (compile, import every module, validate compose file)
         run: |
           python -m compileall -q src scripts
           PYTHONPATH=src python -c "import pkgutil, importlib, sys; sys.path.insert(0, 'src'); [importlib.import_module(m.name) for pkg in ('domain','application','infrastructure') for m in pkgutil.walk_packages(importlib.import_module(pkg).__path__, pkg + '.')]"
           docker compose config -q
+          docker build -q -t domain-copilot:ci .
       - name: Lint
         run: ruff check src tests scripts
       - name: Tests (live Ollama tests skip automatically)
         run: python -m pytest tests -q
       - name: Dependency scan
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.lock
 
   secret-scan:
     runs-on: ubuntu-latest

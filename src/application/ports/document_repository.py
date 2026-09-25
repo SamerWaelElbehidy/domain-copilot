@@ -49,6 +49,9 @@ class DocumentRepository(ABC):
         ...
 
     @abstractmethod
+    async def list_equipment(self) -> list[Equipment]: ...
+
+    @abstractmethod
     async def list_with_status(self) -> list[DocumentStatusRow]:
         """Every document with its ingestion status, newest effective date first."""
         ...

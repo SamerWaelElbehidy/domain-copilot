@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from contextlib import AbstractAsyncContextManager
+from pathlib import Path
 from typing import Callable
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
 from api.container import Container
@@ -94,12 +96,20 @@ def create_app(
     async def _bad_document(_: Request, exc: UnsupportedDocumentError) -> JSONResponse:
         return _error(422, str(exc))
 
+    @app.get("/", include_in_schema=False)
+    async def _home() -> RedirectResponse:
+        return RedirectResponse("/ui/")
+
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(ask.router)
     app.include_router(sessions.router)
     app.include_router(runs.router)
     app.include_router(documents.router)
+
+    # The bundled web UI: static files only, no server-side templating. It is
+    # served under /ui, which the security middleware knows about (CSP).
+    app.mount("/ui", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="ui")
 
     # Added innermost first; the last one added is the outermost.
     app.add_middleware(ErrorBoundaryMiddleware)

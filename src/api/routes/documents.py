@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from api.container import Container
-from api.deps import get_container, require
+from api.deps import current_user, get_container, require
 from application.use_cases.upload_document import upload_document
 from domain.entities.user import User
 from domain.value_objects.role import Permission
@@ -49,6 +49,18 @@ async def upload(
         **container.ingestion.__dict__,  # type: ignore[union-attr]
     )
     return {**report.__dict__, "uploaded_by": user.username}
+
+
+@router.get("/equipment")
+async def list_equipment(
+    _: User = Depends(current_user), container: Container = Depends(get_container)
+) -> list[dict[str, str]]:
+    """Equipment the copilot knows about, for the question filter."""
+    _ready(container)
+    return [
+        {"equipment_id": e.equipment_id, "name": e.name}
+        for e in await container.documents.list_equipment()  # type: ignore[union-attr]
+    ]
 
 
 @router.get("/documents")

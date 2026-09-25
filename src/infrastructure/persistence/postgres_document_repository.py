@@ -85,6 +85,12 @@ class PostgresDocumentRepository(DocumentRepository):
             error,
         )
 
+    async def list_equipment(self) -> list[Equipment]:
+        rows = await self._pool.fetch(
+            "SELECT equipment_id, name, model_number, category FROM equipment ORDER BY name"
+        )
+        return [_row_to_equipment(r) for r in rows]
+
     async def list_with_status(self) -> list[DocumentStatusRow]:
         rows = await self._pool.fetch(
             "SELECT document_id, equipment_id, revision, effective_date, title, doc_type, status, "

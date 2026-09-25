@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import Any
 
 from application.agents.parsing import parse_json_object
 from application.ports.document_repository import DocumentRepository
@@ -114,7 +116,11 @@ class GroundedAnswerer:
         self._min_support = min_support
         self._filter_suspicious = filter_suspicious
 
-    async def answer(self, question: str, equipment_id: str | None = None) -> Answer:
+    async def _retrieve(
+        self, question: str, equipment_id: str | None
+    ) -> tuple[list[Chunk], float, int, Answer | None]:
+        """Retrieval and the gates that need no model. Returns a ready refusal
+        when the question can be turned away before any generation."""
         found = await scoped_search(
             llm_provider=self._llm,
             vector_store=self._vector_store,
@@ -127,28 +133,27 @@ class GroundedAnswerer:
         )
         chunks, top = found.chunks, found.top_dense_score
         if not chunks:
-            return _refuse("no_evidence", chunks, top)
+            return chunks, top, found.quarantined, _refuse("no_evidence", chunks, top)
         if top < self._min_dense_score:
-            return _refuse("below_relevance_threshold", chunks, top)
+            refusal = _refuse("below_relevance_threshold", chunks, top)
+            return chunks, top, found.quarantined, refusal
+        return chunks, top, found.quarantined, None
 
+    def _messages(self, question: str, chunks: list[Chunk]) -> list[Message]:
         evidence = "\n\n".join(
             f'<document id="{n}">\n{_sanitize(c.content)}\n</document>'
             for n, c in enumerate(chunks, start=1)
         )
-        completion = await self._llm.complete(
-            [
-                Message(role="system", content=self._system_prompt),
-                Message(role="user", content=f"Question: {question}\n\nExcerpts:\n{evidence}"),
-            ],
-            json_mode=True,
-        )
-        usage = {
-            "input_tokens": completion.input_tokens,
-            "output_tokens": completion.output_tokens,
-            "model": completion.model,
-        }
+        return [
+            Message(role="system", content=self._system_prompt),
+            Message(role="user", content=f"Question: {question}\n\nExcerpts:\n{evidence}"),
+        ]
+
+    def _validate(self, content: str, chunks: list[Chunk], top: float, usage: dict) -> Answer:
+        """Every guard that decides whether model output may be shown. Shared
+        by the JSON and the streaming path so they can never diverge."""
         try:
-            parsed = parse_json_object(completion.content)
+            parsed = parse_json_object(content)
         except AgentOutputError:
             return _refuse("invalid_model_output", chunks, top, **usage)
 
@@ -169,22 +174,71 @@ class GroundedAnswerer:
             )
             for n in numbers
         )
-        cited_texts = [chunks[n - 1].content for n in numbers]
-        if support_score(text, cited_texts) < self._min_support:
+        cited_chunks = [chunks[n - 1] for n in numbers]
+        if support_score(text, [c.content for c in cited_chunks]) < self._min_support:
             return _refuse("unsupported_answer", chunks, top, **usage)
 
-        cited_chunks = [chunks[n - 1] for n in numbers]
         conflict = find_conflict(
             answer_text=text,
             cited=cited_chunks,
             others=[c for c in chunks if c not in cited_chunks],
         )
         if conflict is not None:
-            return _refuse(
-                "conflicting_sources", chunks, top, detail=conflict.describe(), **usage
-            )
+            return _refuse("conflicting_sources", chunks, top, detail=conflict.describe(), **usage)
 
         return Answer(
             "answered", text.strip(), citations, None,
             tuple(c.chunk_id for c in chunks), top, tuple(chunks), **usage,
         )
+
+    async def answer(self, question: str, equipment_id: str | None = None) -> Answer:
+        chunks, top, _, refusal = await self._retrieve(question, equipment_id)
+        if refusal is not None:
+            return refusal
+        completion = await self._llm.complete(self._messages(question, chunks), json_mode=True)
+        usage = {
+            "input_tokens": completion.input_tokens,
+            "output_tokens": completion.output_tokens,
+            "model": completion.model,
+        }
+        return self._validate(completion.content, chunks, top, usage)
+
+    async def answer_stream(
+        self, question: str, equipment_id: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Same pipeline, streamed (FR-6). Events: `retrieval` (which excerpts
+        were found), `token` (raw model output as it is produced), and a final
+        `answer` carrying the validated result. The streamed tokens are
+        provisional: nothing is shown as the answer until every guard has run.
+        Closing this iterator closes the provider stream, which stops the model."""
+        chunks, top, quarantined, refusal = await self._retrieve(question, equipment_id)
+        yield {
+            "type": "retrieval",
+            "excerpts": [
+                {"n": i, "document_id": c.document_id, "section": c.section_title,
+                 "source": c.source_ref}
+                for i, c in enumerate(chunks, start=1)
+            ],
+            "quarantined": quarantined,
+            "top_dense_score": round(top, 3),
+        }
+        if refusal is not None:
+            yield {"type": "answer", "answer": refusal.as_dict()}
+            return
+
+        content, usage = "", {"input_tokens": 0, "output_tokens": 0, "model": ""}
+        stream = self._llm.stream(self._messages(question, chunks), json_mode=True)
+        try:
+            async for event in stream:
+                if event.kind == "token":
+                    content += event.text
+                    yield {"type": "token", "text": event.text}
+                elif event.kind == "done":
+                    usage = {
+                        "input_tokens": event.input_tokens,
+                        "output_tokens": event.output_tokens,
+                        "model": event.model,
+                    }
+        finally:
+            await stream.aclose()
+        yield {"type": "answer", "answer": self._validate(content, chunks, top, usage).as_dict()}

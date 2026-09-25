@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+.env
+.env.*
+!.env.example
+tests
+eval
+docs
+teaching
+.pytest_cache
+.ruff_cache

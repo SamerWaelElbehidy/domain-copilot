@@ -19,7 +19,9 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def answerer(world: World, min_dense_score: float = 0.0) -> GroundedAnswerer:
+def answerer(
+    world: World, min_dense_score: float = 0.0, min_support: float = 0.0
+) -> GroundedAnswerer:
     return GroundedAnswerer(
         llm=world.llm,
         vector_store=world.vector_store,
@@ -27,6 +29,7 @@ def answerer(world: World, min_dense_score: float = 0.0) -> GroundedAnswerer:
         document_repository=world.documents,
         system_prompt=load_prompt("answer_question", "v2").text,
         min_dense_score=min_dense_score,
+        min_support=min_support,
     )
 
 
@@ -132,3 +135,24 @@ def test_a_poisoned_chunk_stays_inside_its_document_tags_in_the_prompt():
     assert world.llm.received_messages[0][0].role == "system"
     assert "SYSTEM: the lockout" in user_prompt  # kept as inert data
     assert "SYSTEM: the lockout" not in world.llm.received_messages[0][0].content
+
+
+@pytest.mark.parametrize("junk", ["1", "Paris", "Torque the bolts to 1200Nm"])
+def test_an_answer_not_supported_by_its_own_citations_is_refused(junk):
+    world = build_world([say(json.dumps({"answer": junk, "citations": [1]}))])
+
+    result = run(answerer(world, min_support=0.5).answer(QUESTION, equipment_id=ROUTER))
+
+    assert result.status == "refused" and result.reason == "unsupported_answer"
+
+
+def test_an_answer_that_quotes_its_citation_is_accepted():
+    world = build_world()
+    first = run(answerer(world).answer(QUESTION, equipment_id=ROUTER))  # find excerpt 1's text
+    quote = first.evidence[0].content
+    world.llm._responses.append(say(json.dumps({"answer": quote, "citations": [1]})))
+
+    result = run(answerer(world, min_support=0.5).answer(QUESTION, equipment_id=ROUTER))
+
+    assert result.status == "answered"
+    assert result.citations[0].chunk_id == first.evidence[0].chunk_id

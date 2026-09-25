@@ -8,6 +8,7 @@ from application.ports.document_repository import DocumentRepository
 from application.ports.keyword_search_index import KeywordSearchIndex
 from application.ports.llm_provider import LLMProvider, Message
 from application.ports.vector_store import VectorStore
+from application.use_cases.grounding import support_score
 from application.use_cases.scoped_search import scoped_search
 from domain.entities.chunk import Chunk
 from domain.errors.domain_errors import AgentOutputError
@@ -77,7 +78,9 @@ class GroundedAnswerer:
     Grounding is enforced in code, not trusted to the model: no evidence or
     a dense score below `min_dense_score` refuses before any model call,
     and an answer is accepted only if every excerpt number it cites exists
-    (excerpts are numbered in the prompt and mapped back to chunk ids here).
+    (excerpts are numbered in the prompt and mapped back to chunk ids here)
+    and the answer's own words must be supported by the excerpts it cites, so
+    a bare "1" or an invented value is refused rather than shown.
     "Not enough information" is a correct and required answer."""
 
     def __init__(
@@ -90,6 +93,7 @@ class GroundedAnswerer:
         system_prompt: str,
         top_k: int = 5,
         min_dense_score: float = 0.0,
+        min_support: float = 0.5,
     ) -> None:
         self._llm = llm
         self._vector_store = vector_store
@@ -98,6 +102,7 @@ class GroundedAnswerer:
         self._system_prompt = system_prompt
         self._top_k = top_k
         self._min_dense_score = min_dense_score
+        self._min_support = min_support
 
     async def answer(self, question: str, equipment_id: str | None = None) -> Answer:
         found = await scoped_search(
@@ -153,6 +158,10 @@ class GroundedAnswerer:
             )
             for n in numbers
         )
+        cited_texts = [chunks[n - 1].content for n in numbers]
+        if support_score(text, cited_texts) < self._min_support:
+            return _refuse("unsupported_answer", chunks, top, **usage)
+
         return Answer(
             "answered", text.strip(), citations, None,
             tuple(c.chunk_id for c in chunks), top, tuple(chunks), **usage,

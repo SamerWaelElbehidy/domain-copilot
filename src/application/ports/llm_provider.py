@@ -43,6 +43,9 @@ class StreamEvent:
     kind: str  # "token" | "tool_call" | "done"
     text: str = ""
     tool_call: ToolCall | None = None
+    input_tokens: int = 0  # set on the "done" event
+    output_tokens: int = 0
+    model: str = ""
 
 
 class LLMProvider(ABC):
@@ -68,7 +71,11 @@ class LLMProvider(ABC):
         self,
         messages: list[Message],
         tools: list[ToolDefinition] | None = None,
-    ) -> AsyncIterator[StreamEvent]: ...
+        json_mode: bool = False,
+    ) -> AsyncIterator[StreamEvent]:
+        """Token-level streaming (FR-6). Closing the iterator must stop
+        generation on the provider, so a cancelled request stops real work."""
+        ...
 
     @abstractmethod
     async def embed(self, texts: list[str]) -> list[list[float]]: ...

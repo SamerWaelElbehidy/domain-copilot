@@ -55,8 +55,12 @@ class OllamaProvider(LLMProvider):
         self,
         messages: list[Message],
         tools: list[ToolDefinition] | None = None,
+        json_mode: bool = False,
     ) -> AsyncIterator[StreamEvent]:
         payload = self._build_chat_payload(messages, tools, stream=True)
+        if json_mode and not tools:
+            payload["format"] = "json"
+        usage = StreamEvent(kind="done")
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             async with client.stream(
                 "POST", f"{self._base_url}/api/chat", json=payload
@@ -79,8 +83,14 @@ class OllamaProvider(LLMProvider):
                         )
 
                     if chunk.get("done"):
+                        usage = StreamEvent(
+                            kind="done",
+                            input_tokens=chunk.get("prompt_eval_count", 0),
+                            output_tokens=chunk.get("eval_count", 0),
+                            model=chunk.get("model", ""),
+                        )
                         break
-        yield StreamEvent(kind="done")
+        yield usage
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:

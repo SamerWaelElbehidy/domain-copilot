@@ -36,6 +36,7 @@ class OpenAICompatibleProvider(LLMProvider):
         timeout_seconds: float = 60.0,
         temperature: float = 0.0,
         seed: int | None = 42,
+        max_output_tokens: int | None = None,
         name: str = "openai",
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -49,6 +50,7 @@ class OpenAICompatibleProvider(LLMProvider):
         self._timeout = timeout_seconds
         self._temperature = temperature
         self._seed = seed
+        self._max_output_tokens = max_output_tokens
         self._name = name
         self._transport = transport
 
@@ -158,6 +160,8 @@ class OpenAICompatibleProvider(LLMProvider):
         }
         if self._seed is not None:
             payload["seed"] = self._seed
+        if self._max_output_tokens:
+            payload["max_tokens"] = self._max_output_tokens  # hard cap per call
         if tools:
             payload["tools"] = [
                 {

@@ -14,6 +14,7 @@ from application.agents.symptom_matcher import SymptomMatcher
 from application.agents.tool_loop import LoopResult
 from application.agents.tool_registry import ToolRegistry
 from application.agents.work_order_generator import WorkOrderGenerator
+from application.correlation import get_correlation_id
 from application.ports.run_repository import RunRepository
 from application.ports.work_order_repository import WorkOrderRepository
 from domain.entities.run import Run
@@ -214,7 +215,9 @@ class CopilotOrchestrator:
     # ---- pipeline -----------------------------------------------------------
 
     async def _pipeline(self, run: Run, symptom: str) -> None:
-        self._record(run, "receive", None, None, {"symptom": symptom}, {"accepted": True},
+        self._record(run, "receive", None, None,
+                     {"symptom": symptom, "correlation_id": get_correlation_id()},
+                     {"accepted": True},
                      0, 0, self._clock(), self._clock())
 
         run.transition_to(RunState.MATCHING_SYMPTOM)

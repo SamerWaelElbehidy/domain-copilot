@@ -29,6 +29,7 @@ class OllamaProvider(LLMProvider):
         timeout_seconds: float = 60.0,
         temperature: float = 0.0,
         seed: int | None = 42,
+        max_output_tokens: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
@@ -39,6 +40,8 @@ class OllamaProvider(LLMProvider):
         self._options: dict = {"temperature": temperature}
         if seed is not None:
             self._options["seed"] = seed
+        if max_output_tokens:
+            self._options["num_predict"] = max_output_tokens  # hard cap per call
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=self._timeout, transport=self._transport)

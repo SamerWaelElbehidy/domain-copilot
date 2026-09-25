@@ -185,3 +185,19 @@ def test_closing_the_stream_early_closes_the_provider_stream():
     asyncio.run(consume_one_token_then_disconnect())
 
     assert s.world.llm.stream_closed_early is True
+
+
+def test_personal_data_is_redacted_before_storage_and_before_the_model_sees_it():
+    s = AskStack([say(GOOD)])
+    question = QUESTION + " Call me on 01012345678 or ali@example.com, id 29001011234567"
+
+    body = s.ask(question=question).json()
+
+    assert body["redactions"] == {"EMAIL": 1, "NATIONAL_ID": 1, "PHONE": 1}
+    stored = s.container.sessions.messages[body["session_id"]][0].content
+    sent_to_model = json.dumps(
+        [[m.content for m in call] for call in s.world.llm.received_messages]
+    )
+    for leaked in ("01012345678", "ali@example.com", "29001011234567"):
+        assert leaked not in stored and leaked not in sent_to_model
+    assert "[PHONE]" in stored

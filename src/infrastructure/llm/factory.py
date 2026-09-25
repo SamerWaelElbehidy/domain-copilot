@@ -24,6 +24,7 @@ def build_llm(settings: Settings, llm_calls: LLMCallRepository) -> FallbackLLMPr
                 chat_model=settings.ollama_chat_model,
                 embed_model=settings.ollama_embed_model,
                 timeout_seconds=settings.llm_timeout_seconds,
+                max_output_tokens=settings.llm_max_output_tokens,
             )
         elif name == "openai":
             if not settings.openai_api_key:
@@ -36,6 +37,7 @@ def build_llm(settings: Settings, llm_calls: LLMCallRepository) -> FallbackLLMPr
                 chat_model=settings.openai_chat_model,
                 embed_dimensions=settings.embedding_dim,
                 timeout_seconds=settings.llm_timeout_seconds,
+                max_output_tokens=settings.llm_max_output_tokens,
             )
         else:
             raise RuntimeError(f"unknown provider '{name}' in LLM_PROVIDER_CHAIN")

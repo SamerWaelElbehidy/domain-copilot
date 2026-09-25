@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -18,11 +19,13 @@ from application.correlation import (
     reset_usage_context,
     set_usage_context,
 )
+from application.pii import redact_pii
 from application.ports.chat_session_repository import ChatMessage
 from domain.entities.user import User
 from domain.value_objects.role import Permission
 
 router = APIRouter(tags=["ask"])
+security_log = logging.getLogger("api.security")
 _can_ask = require(Permission.ASK)
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -36,6 +39,7 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     session_id: str
     correlation_id: str
+    redactions: dict[str, int]
     status: str
     answer: str
     reason: str | None
@@ -47,14 +51,20 @@ def _clean(question: str) -> str:
     return _CONTROL_CHARS.sub("", question).strip()
 
 
-async def _prepare(body: AskRequest, user: User, container: Container) -> tuple[str, str]:
+async def _prepare(
+    body: AskRequest, user: User, container: Container
+) -> tuple[str, str, dict[str, int]]:
     if container.answerer is None or container.sessions is None:
         raise HTTPException(status_code=503, detail="answering is not configured")
     if container.ask_limiter is not None and not container.ask_limiter.allow(f"ask:{user.user_id}"):
         raise HTTPException(status_code=429, detail="too many questions, slow down")
-    question = _clean(body.question)
+    redaction = redact_pii(_clean(body.question))
+    question = redaction.text
     if len(question) < 3:
         raise HTTPException(status_code=422, detail="question is empty after cleaning")
+    if redaction.total:
+        # Counts and kinds only. The value itself is never logged or stored.
+        security_log.info("pii redacted user=%s counts=%s", user.username, redaction.counts)
 
     if body.session_id is not None:
         # 404 for someone else's session, exactly like a missing one.
@@ -66,7 +76,7 @@ async def _prepare(body: AskRequest, user: User, container: Container) -> tuple[
     await container.sessions.add_message(
         session_id, ChatMessage("user", question, "asked", datetime.now(UTC))
     )
-    return session_id, question
+    return session_id, question, redaction.counts
 
 
 async def _store_answer(container: Container, session_id: str, answer: dict[str, Any]) -> None:
@@ -92,7 +102,7 @@ async def ask(
 ) -> AskResponse:
     """Grounded answer with citations. Refusal ("not enough information") is a
     normal, required outcome and is returned with its reason."""
-    session_id, question = await _prepare(body, user, container)
+    session_id, question, redactions = await _prepare(body, user, container)
     token = set_usage_context(UsageContext(user_id=user.user_id, purpose="ask"))
     try:
         result = await container.answerer.answer(question, body.equipment_id)  # type: ignore[union-attr]
@@ -101,7 +111,8 @@ async def ask(
     payload = result.as_dict()
     await _store_answer(container, session_id, payload)
     return AskResponse(
-        session_id=session_id, correlation_id=get_correlation_id(), status=payload["status"],
+        session_id=session_id, correlation_id=get_correlation_id(), redactions=redactions,
+        status=payload["status"],
         answer=payload["answer"], reason=payload["reason"], detail=payload["detail"],
         citations=payload["citations"],
     )
@@ -121,13 +132,13 @@ async def ask_stream(
     are provisional model output; only the final `answer` event is validated.
     If the client disconnects, the generator is cancelled, the provider
     stream is closed, and the model stops generating."""
-    session_id, question = await _prepare(body, user, container)
+    session_id, question, redactions = await _prepare(body, user, container)
     correlation_id = get_correlation_id()
 
     async def events() -> AsyncIterator[bytes]:
         token = set_usage_context(UsageContext(user_id=user.user_id, purpose="ask"))
         yield _sse({"type": "session", "session_id": session_id,
-                    "correlation_id": correlation_id})
+                    "correlation_id": correlation_id, "redactions": redactions})
         stream = container.answerer.answer_stream(question, body.equipment_id)  # type: ignore[union-attr]
         try:
             async for event in stream:

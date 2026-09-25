@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 
 import pytest
@@ -6,8 +7,10 @@ from starlette.testclient import TestClient
 
 from api.rate_limit import TokenBucketLimiter
 from api.run_manager import RunManager
+from application.llm_recording import RecordingLLMProvider
 from domain.value_objects.role import Role
 from tests.api.test_auth_and_security import Stack, make_settings
+from tests.fakes.in_memory import InMemoryLLMCallRepository
 from tests.fakes.world import World, build_world
 from tests.unit.agents.test_orchestrator import (
     SYMPTOM,
@@ -254,5 +257,67 @@ def test_input_validation_auth_and_rate_limit():
         assert stack.start("super1").status_code == 403
         assert stack.start().status_code == 202
         assert stack.start().status_code == 429
+    finally:
+        stack.close()
+
+
+def test_personal_data_in_a_symptom_is_redacted_in_the_audit_log_too(stack):
+    response = stack.start(symptom=SYMPTOM + ", contact ali@example.com or 01012345678")
+    run_id = response.json()["run_id"]
+    stack.wait(run_id)
+
+    assert response.json()["redactions"] == {"EMAIL": 1, "PHONE": 1}
+    trace = stack.client.get(f"/runs/{run_id}/trace", headers=stack.auth("tech1")).json()
+    assert "ali@example.com" not in json.dumps(trace) and "01012345678" not in json.dumps(trace)
+    assert "[EMAIL]" in trace["steps"][0]["input"]["symptom"]
+
+
+def test_a_decision_comment_is_redacted_before_it_is_recorded(stack):
+    run_id = pending(stack)
+
+    stack.decide(run_id, comment="checked, call 01012345678 if wrong")
+
+    trace = stack.client.get(f"/runs/{run_id}/trace", headers=stack.auth("super1")).json()
+    decision = next(s for s in trace["steps"] if s["name"] == "human_decision")
+    assert "01012345678" not in json.dumps(decision) and "[PHONE]" in decision["input"]["comment"]
+
+
+class RecordedRunStack(RunStack):
+    """The workflow's model calls go through the recording decorator, as they
+    do in production."""
+
+    def __init__(self):
+        Stack.__init__(self, make_settings(max_body_bytes=100_000))
+        self.world = build_world()
+        self.world.llm._responses.extend(happy_script(self.world))
+        self.calls = InMemoryLLMCallRepository()
+        self.world.llm = RecordingLLMProvider(self.world.llm, self.calls, provider_name="fake")
+        self.manager = RunManager()
+        self.orchestrator, self.runs = make_orchestrator(self.world, emit=self.manager.publish)
+        self.manager.bind(self.orchestrator)
+        self.container.runs, self.container.orchestrator = self.runs, self.orchestrator
+        self.container.run_manager, self.container.llm_calls = self.manager, self.calls
+        self.container.ask_limiter = TokenBucketLimiter(100)
+        for name, role in [("tech1", Role.TECHNICIAN), ("super1", Role.SUPERVISOR)]:
+            self.add_user(name, role)
+        self.client = TestClient(self.app, raise_server_exceptions=False)
+        self.client.__enter__()
+
+
+def test_every_model_call_of_a_run_is_attributed_and_linked_by_correlation_id():
+    stack = RecordedRunStack()
+    try:
+        response = stack.start()
+        run_id = response.json()["run_id"]
+        stack.wait(run_id)
+
+        trace = stack.client.get(f"/runs/{run_id}/trace", headers=stack.auth("tech1")).json()
+
+        calls = asyncio.run(stack.calls.calls_for_run(run_id))
+        assert calls and all(c.user_id == "u-tech1" and c.purpose == "run" for c in calls)
+        correlation_id = trace["steps"][0]["input"]["correlation_id"]
+        assert correlation_id != "-" and {c.correlation_id for c in calls} == {correlation_id}
+        assert trace["usage"]["calls"] == len(calls)
+        assert trace["usage"]["input_tokens"] == sum(c.input_tokens for c in calls)
     finally:
         stack.close()

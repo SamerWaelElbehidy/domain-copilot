@@ -28,6 +28,7 @@ class Settings:
     openai_chat_model: str = "gpt-4o-mini"
     llm_timeout_seconds: float = 120.0
     llm_failure_threshold: int = 3
+    llm_max_output_tokens: int = 1024
     llm_cooldown_seconds: float = 30.0
 
     @staticmethod
@@ -57,5 +58,6 @@ class Settings:
             openai_chat_model=env("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
             llm_timeout_seconds=float(env("LLM_TIMEOUT_SECONDS", "120")),
             llm_failure_threshold=int(env("LLM_FAILURE_THRESHOLD", "3")),
+            llm_max_output_tokens=int(env("LLM_MAX_OUTPUT_TOKENS", "1024")),
             llm_cooldown_seconds=float(env("LLM_COOLDOWN_SECONDS", "30")),
         )

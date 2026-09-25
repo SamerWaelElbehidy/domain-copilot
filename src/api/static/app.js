@@ -210,7 +210,9 @@ $("ask-form").addEventListener("submit", async (event) => {
       method: "POST",
       json: { question: $("question").value, equipment_id: $("equipment").value || null },
     }, (e) => {
-      if (e.type === "retrieval") {
+      if (e.type === "session" && Object.keys(e.redactions || {}).length) {
+        toast("Personal details were removed from your question before it was processed.");
+      } else if (e.type === "retrieval") {
         $("ask-progress").textContent = e.excerpts.length
           ? "Found " + e.excerpts.length + " passages. Drafting an answer..."
           : "No relevant passages found.";
@@ -281,7 +283,10 @@ const EVENT_TEXT = {
 $("run-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const { run_id } = await api("/runs", { method: "POST", json: { symptom: $("symptom").value } });
+    const { run_id, redactions } = await api("/runs", {
+      method: "POST", json: { symptom: $("symptom").value },
+    });
+    if (Object.keys(redactions || {}).length) toast("Personal details were removed before processing.");
     currentRunId = run_id;
     $("run-steps").replaceChildren();
     $("run-live").hidden = false;
@@ -362,6 +367,8 @@ async function openRun(runId) {
     $("detail-body").replaceChildren(
       h("p", {}, stateBadge(run.state), " ", h("span", { class: "hint" }, "started ",
         new Date(run.started_at).toLocaleString())),
+      h("p", { class: "hint" }, "Model usage: ", trace.usage.calls, " calls, ",
+        trace.usage.input_tokens + trace.usage.output_tokens, " tokens, $", trace.usage.cost_usd.toFixed(4)),
       run.work_order ? workOrderView(run.work_order) : null);
     renderTrace(trace.steps);
     const replayBtn = $("detail-replay");

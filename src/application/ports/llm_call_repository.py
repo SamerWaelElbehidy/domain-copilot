@@ -44,3 +44,6 @@ class LLMCallRepository(ABC):
 
     @abstractmethod
     async def calls_for_correlation(self, correlation_id: str) -> list[LLMCall]: ...
+
+    @abstractmethod
+    async def calls_for_run(self, run_id: str) -> list[LLMCall]: ...

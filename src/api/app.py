@@ -16,7 +16,7 @@ from api.middleware import (
     SecurityHeadersMiddleware,
 )
 from api.rate_limit import TokenBucketLimiter
-from api.routes import auth, health
+from api.routes import ask, auth, health, sessions
 from application.correlation import get_correlation_id
 from config.api_settings import ApiSettings
 from domain.errors.domain_errors import (
@@ -71,6 +71,8 @@ def create_app(
 
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(ask.router)
+    app.include_router(sessions.router)
 
     # Added innermost first; the last one added is the outermost.
     app.add_middleware(ErrorBoundaryMiddleware)

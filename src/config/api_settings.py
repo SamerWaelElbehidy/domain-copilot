@@ -17,6 +17,7 @@ class ApiSettings:
     login_attempts_per_minute: int
     max_body_bytes: int
     upload_max_bytes: int
+    ask_per_minute: int = 20
 
     @staticmethod
     def from_env() -> ApiSettings:
@@ -30,6 +31,7 @@ class ApiSettings:
             login_attempts_per_minute=int(env("LOGIN_ATTEMPTS_PER_MINUTE", "5")),
             max_body_bytes=int(env("MAX_BODY_BYTES", "1000000")),
             upload_max_bytes=int(env("UPLOAD_MAX_BYTES", "10000000")),
+            ask_per_minute=int(env("ASK_PER_MINUTE", "20")),
         )
         settings.validate()
         return settings

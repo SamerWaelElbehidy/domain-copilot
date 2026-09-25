@@ -25,6 +25,8 @@ class FakeLLMProvider(LLMProvider):
         self._responses = list(responses or [])
         self._embedding_dim = embedding_dim
         self.received_messages: list[list[Message]] = []
+        self.stream_closed_early = False
+        self.streams_finished = 0
 
     async def complete(
         self,
@@ -41,11 +43,22 @@ class FakeLLMProvider(LLMProvider):
         self,
         messages: list[Message],
         tools: list[ToolDefinition] | None = None,
+        json_mode: bool = False,
     ) -> AsyncIterator[StreamEvent]:
-        result = await self.complete(messages, tools)
-        for word in result.content.split():
-            yield StreamEvent(kind="token", text=word + " ")
-        yield StreamEvent(kind="done")
+        result = await self.complete(messages, tools, json_mode)
+        self.stream_closed_early = True
+        try:
+            for word in result.content.split():
+                yield StreamEvent(kind="token", text=word + " ")
+            self.stream_closed_early = False
+            yield StreamEvent(
+                kind="done",
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                model=result.model,
+            )
+        finally:
+            self.streams_finished += 1
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Hashed bag-of-words: deterministic, and texts sharing words get

@@ -3,8 +3,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from application.ports.chat_session_repository import (
+    ChatMessage,
+    ChatSession,
+    ChatSessionRepository,
+)
 from application.ports.document_repository import DocumentRepository
 from application.ports.keyword_search_index import KeywordSearchIndex
+from application.ports.llm_call_repository import LLMCall, LLMCallRepository, UsageRow
 from application.ports.run_repository import RunRepository
 from application.ports.user_repository import UserRecord, UserRepository
 from application.ports.vector_store import ScoredChunk, VectorStore
@@ -166,3 +172,58 @@ class InMemoryUserRepository(UserRepository):
 
     async def create(self, user: User, password_hash: str) -> None:
         self.records[user.user_id] = UserRecord(user, password_hash)
+
+
+class InMemoryLLMCallRepository(LLMCallRepository):
+    def __init__(self) -> None:
+        self.calls: list[LLMCall] = []
+
+    async def record(self, call: LLMCall) -> None:
+        self.calls.append(call)
+
+    async def usage_by_user(self, since) -> list[UsageRow]:
+        totals: dict[str | None, list[float]] = {}
+        for call in self.calls:
+            if call.created_at < since:
+                continue
+            row = totals.setdefault(call.user_id, [0, 0, 0, 0.0])
+            row[0] += 1
+            row[1] += call.input_tokens
+            row[2] += call.output_tokens
+            row[3] += call.cost_usd
+        return [UsageRow(u, int(r[0]), int(r[1]), int(r[2]), r[3]) for u, r in totals.items()]
+
+    async def calls_for_correlation(self, correlation_id: str) -> list[LLMCall]:
+        return [c for c in self.calls if c.correlation_id == correlation_id]
+
+
+class InMemoryChatSessionRepository(ChatSessionRepository):
+    def __init__(self) -> None:
+        self.sessions: dict[str, ChatSession] = {}
+        self.messages: dict[str, list[ChatMessage]] = {}
+        self._counter = 0
+
+    async def create_session(self, user_id: str, title: str) -> ChatSession:
+        from datetime import UTC, datetime
+
+        self._counter += 1
+        session = ChatSession(f"s-{self._counter}", user_id, title[:120], datetime.now(UTC))
+        self.sessions[session.session_id] = session
+        self.messages[session.session_id] = []
+        return session
+
+    async def add_message(self, session_id: str, message: ChatMessage) -> None:
+        self.messages[session_id].append(message)
+
+    async def list_sessions(self, user_id: str) -> list[ChatSession]:
+        return [s for s in self.sessions.values() if s.user_id == user_id]
+
+    async def get_session(self, user_id: str, session_id: str):
+        session = self.sessions.get(session_id)
+        if session is None or session.user_id != user_id:
+            return None
+        return session, list(self.messages[session_id])
+
+    async def owns(self, user_id: str, session_id: str) -> bool:
+        session = self.sessions.get(session_id)
+        return session is not None and session.user_id == user_id

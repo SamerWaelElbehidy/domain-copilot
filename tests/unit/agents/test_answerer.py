@@ -27,7 +27,7 @@ def answerer(
         vector_store=world.vector_store,
         keyword_index=world.keyword_index,
         document_repository=world.documents,
-        system_prompt=load_prompt("answer_question", "v2").text,
+        system_prompt=load_prompt("answer_question", "v3").text,
         min_dense_score=min_dense_score,
         min_support=min_support,
     )

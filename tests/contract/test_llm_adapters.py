@@ -220,3 +220,25 @@ def test_the_api_key_is_sent_as_a_header_and_never_appears_in_errors_or_repr():
 def test_the_hosted_adapter_refuses_to_start_without_a_key():
     with pytest.raises(ValueError):
         OpenAICompatibleProvider(api_key="")
+
+
+@pytest.mark.parametrize("name", ["ollama", "openai"])
+def test_the_output_token_cap_is_sent_to_the_provider(name):
+    seen = []
+
+    def spy(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={
+            "model": "m", "message": {"content": "x"}, "choices": [{"message": {"content": "x"}}],
+        })
+
+    transport = httpx.MockTransport(spy)
+    if name == "ollama":
+        provider = OllamaProvider(max_output_tokens=256, transport=transport)
+    else:
+        provider = OpenAICompatibleProvider(api_key=KEY, max_output_tokens=256, transport=transport)
+
+    run(provider.complete(MESSAGES))
+
+    capped = seen[0]["options"]["num_predict"] if name == "ollama" else seen[0]["max_tokens"]
+    assert capped == 256

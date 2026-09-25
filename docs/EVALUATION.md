@@ -126,6 +126,8 @@ questions with 0% false refusals; at 0.75 it catches 100% with 4.5% false refusa
 - The groundedness proxy does not evaluate reasoning.
 - Local 1B and 3B models on a laptop; results say little about hosted models.
 - One seed, one run per configuration.
+- **Tuned on the reported set.** The relevance threshold (0.73) was chosen by sweeping over these same 35 questions, and the conflict guard was narrowed after it produced false positives on them. The reported numbers are therefore optimistic for unseen questions. A held-out set is the fix and is listed in sections B.4 and B.5 of the system design.
+- **Question answering only.** The golden set measures the ask path. The multi-agent workflow is covered by scripted tests and one live test, not by a graded set of symptoms.
 
 ## 7. Reproducing
 

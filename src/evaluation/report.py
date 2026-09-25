@@ -20,7 +20,8 @@ def render_markdown(
         "",
         f"- chat model: `{meta['chat_model']}`, embedding model: `{meta['embed_model']}`",
         f"- top_k: {meta['top_k']}, relevance threshold: {meta['min_dense_score']}, "
-        f"min answer support: {meta['min_support']}",
+        f"min answer support: {meta['min_support']}, "
+        f"injection filter: {'on' if meta['injection_filter'] else 'off'}",
         f"- cases: {summary['cases']} ({summary['adversarial_cases']} adversarial), "
         f"errors: {summary['errors']}",
         "",

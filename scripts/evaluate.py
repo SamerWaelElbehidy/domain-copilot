@@ -117,10 +117,11 @@ async def main(args: argparse.Namespace) -> int:
             vector_store=vector_store,
             keyword_index=keyword_index,
             document_repository=documents,
-            system_prompt=load_prompt("answer_question", "v2").text,
+            system_prompt=load_prompt("answer_question", "v3").text,
             top_k=args.top_k,
             min_dense_score=args.min_dense_score,
             min_support=args.min_support,
+            filter_suspicious=not args.no_injection_filter,
         )
 
         def show(result) -> None:
@@ -141,6 +142,7 @@ async def main(args: argparse.Namespace) -> int:
         "top_k": args.top_k,
         "min_dense_score": args.min_dense_score,
         "min_support": args.min_support,
+        "injection_filter": not args.no_injection_filter,
     }
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
@@ -182,6 +184,11 @@ if __name__ == "__main__":
         "--min-dense-score", type=float, default=Settings.from_env().relevance_threshold
     )
     parser.add_argument("--min-support", type=float, default=0.5)
+    parser.add_argument(
+        "--no-injection-filter",
+        action="store_true",
+        help="disable the retrieval-time injection scan to measure the model's own resistance",
+    )
     parser.add_argument("--label", default="baseline")
     parser.add_argument("--limit", type=int, default=0)
     sys.exit(asyncio.run(main(parser.parse_args())))

@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -20,7 +21,7 @@ from infrastructure.security.jwt_token_service import JwtTokenService
 from infrastructure.security.password_hasher import ScryptPasswordHasher
 from tests.fakes.in_memory import InMemoryUserRepository
 
-SECRET = "a-test-secret-that-is-long-enough-for-hs256-0123456789"
+SECRET = secrets.token_urlsafe(48)  # generated per run, never a literal
 PASSWORD = "correct horse battery staple"
 
 
@@ -158,7 +159,7 @@ def test_a_token_signed_with_another_secret_is_rejected(stack):
     forged = jwt.encode(
         {"sub": "u-tech1", "username": "tech1", "role": "admin", "iss": "domain-copilot",
          "exp": int((datetime.now(UTC) + timedelta(hours=1)).timestamp())},
-        "some-other-secret-that-is-also-long-enough-0000000",
+        secrets.token_urlsafe(48),
         algorithm="HS256",
     )
 

@@ -219,6 +219,10 @@ $("ask-form").addEventListener("submit", async (event) => {
       } else if (e.type === "token") {
         $("ask-draft").hidden = false;
         $("ask-draft").textContent += e.text;
+      } else if (e.type === "error") {
+        $("ask-progress").textContent = "";
+        $("ask-draft").hidden = true;
+        $("ask-final").replaceChildren(h("div", { class: "bad verdict" }, e.detail));
       } else if (e.type === "answer") {
         $("ask-progress").textContent = "Checked against the sources.";
         $("ask-draft").hidden = true;

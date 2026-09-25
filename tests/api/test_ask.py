@@ -5,6 +5,7 @@ import pytest
 
 from api.rate_limit import TokenBucketLimiter
 from application.llm_recording import RecordingLLMProvider
+from application.ports.llm_provider import ProviderUnavailableError
 from application.use_cases.answer_question import GroundedAnswerer
 from config.prompts import load_prompt
 from domain.value_objects.role import Role
@@ -201,3 +202,38 @@ def test_personal_data_is_redacted_before_storage_and_before_the_model_sees_it()
     for leaked in ("01012345678", "ali@example.com", "29001011234567"):
         assert leaked not in stored and leaked not in sent_to_model
     assert "[PHONE]" in stored
+
+
+def _model_down(stack):
+    async def down(*_args, **_kwargs):
+        raise ProviderUnavailableError("ollama: ReadTimeout")
+
+    stack.world.llm.complete = down
+
+
+def test_a_model_outage_is_a_503_with_a_retry_hint_and_no_internal_detail():
+    s = AskStack([])
+    _model_down(s)
+
+    response = s.ask()
+
+    assert response.status_code == 503 and response.headers["retry-after"] == "10"
+    assert "try again" in response.json()["detail"]
+    assert "ollama" not in response.text and "ReadTimeout" not in response.text
+
+
+def test_a_model_outage_during_streaming_is_reported_as_an_error_event():
+    s = AskStack([])
+    _model_down(s)
+
+    response = s.client.post(
+        "/ask/stream", json={"question": QUESTION, "equipment_id": ROUTER}, headers=s.auth("tech1")
+    )
+
+    events = [
+        json.loads(line[len("data: "):])
+        for line in response.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    assert events[-1]["type"] == "error" and "try again" in events[-1]["detail"]
+    assert "ReadTimeout" not in response.text

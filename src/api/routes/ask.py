@@ -21,6 +21,7 @@ from application.correlation import (
 )
 from application.pii import redact_pii
 from application.ports.chat_session_repository import ChatMessage
+from application.ports.llm_provider import ProviderUnavailableError
 from domain.entities.user import User
 from domain.value_objects.role import Permission
 
@@ -145,6 +146,11 @@ async def ask_stream(
                 if event["type"] == "answer":
                     await _store_answer(container, session_id, event["answer"])
                 yield _sse(event)
+        except ProviderUnavailableError:
+            yield _sse({
+                "type": "error",
+                "detail": "the language model is not available right now, please try again",
+            })
         finally:
             await stream.aclose()
             reset_usage_context(token)

@@ -129,6 +129,9 @@ class InMemoryDocumentRepository(DocumentRepository):
     ) -> None:
         self.ingestion_status[document_id] = (status, error)
 
+    async def list_equipment(self):
+        return sorted(self.equipment.values(), key=lambda e: e.name)
+
     async def list_with_status(self):
         from application.ports.document_repository import DocumentStatusRow
 

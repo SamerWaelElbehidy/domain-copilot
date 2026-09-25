@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Domain Copilot</title>
+  <link rel="stylesheet" href="/ui/app.css">
+</head>
+<body>
+  <header>
+    <h1>Domain Copilot <span class="sub">Dawlia Furniture Works, Damietta</span></h1>
+    <div id="whoami" hidden>
+      <span id="who"></span>
+      <button id="logout" class="ghost">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="login-view">
+      <form id="login-form" class="card narrow">
+        <h2>Sign in</h2>
+        <label>Username <input id="username" autocomplete="username" required></label>
+        <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Sign in</button>
+        <p id="login-error" class="error" role="alert"></p>
+        <p class="hint">Demo accounts: technician1, supervisor1, admin1 (see README).</p>
+      </form>
+    </section>
+
+    <section id="app-view" hidden>
+      <nav id="tabs" role="tablist"></nav>
+
+      <div id="tab-ask" class="tab" hidden>
+        <form id="ask-form" class="card">
+          <label>Question
+            <textarea id="question" rows="3" maxlength="1000" required
+              placeholder="e.g. What must be checked on the dust extraction hose before every job?"></textarea>
+          </label>
+          <label>Equipment (optional)
+            <select id="equipment"><option value="">Any equipment</option></select>
+          </label>
+          <div class="row">
+            <button type="submit" id="ask-btn">Ask</button>
+            <button type="button" id="ask-stop" class="ghost" hidden>Stop</button>
+          </div>
+        </form>
+        <div id="ask-out" class="card" hidden>
+          <p class="hint" id="ask-progress"></p>
+          <div id="ask-draft" class="draft" hidden></div>
+          <div id="ask-final"></div>
+        </div>
+      </div>
+
+      <div id="tab-runs" class="tab" hidden>
+        <form id="run-form" class="card">
+          <label>Describe the problem
+            <textarea id="symptom" rows="2" maxlength="1000" required
+              placeholder="e.g. spindle overheating during long runs"></textarea>
+          </label>
+          <button type="submit">Start diagnostic workflow</button>
+        </form>
+        <div id="run-live" class="card" hidden>
+          <h3>Progress</h3>
+          <ol id="run-steps" class="steps"></ol>
+          <div class="row">
+            <button id="run-cancel" class="ghost" hidden>Cancel run</button>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Runs</h3>
+          <div id="run-list"></div>
+        </div>
+      </div>
+
+      <div id="tab-approvals" class="tab" hidden>
+        <div class="row"><h2>Waiting for your decision</h2><button id="refresh-approvals" class="ghost">Refresh</button></div>
+        <div id="approval-list"></div>
+      </div>
+
+      <div id="tab-detail" class="tab" hidden>
+        <div class="card">
+          <div class="row">
+            <h2 id="detail-title">Run</h2>
+            <span id="chain-badge" class="badge"></span>
+          </div>
+          <div id="detail-body"></div>
+          <div class="row">
+            <button id="detail-replay" class="ghost" hidden>Replay recorded steps</button>
+          </div>
+        </div>
+        <div class="card"><h3>Audit trail</h3><ol id="trace" class="steps"></ol></div>
+      </div>
+
+      <div id="tab-history" class="tab" hidden>
+        <div class="card"><h2>My questions</h2><div id="session-list"></div></div>
+      </div>
+
+      <div id="tab-documents" class="tab" hidden>
+        <form id="upload-form" class="card">
+          <h2>Upload a document</h2>
+          <label>File (PDF or Markdown) <input id="file" type="file" accept=".pdf,.md,.markdown" required></label>
+          <p class="hint">Markdown carries its own metadata. For a PDF, fill in the fields below.</p>
+          <div class="grid">
+            <label>Equipment id <input id="m-equipment-id" placeholder="eq-cnc-router-dwr2200"></label>
+            <label>Equipment name <input id="m-equipment-name" placeholder="CNC Wood Router DWR-2200"></label>
+            <label>Document id <input id="m-document-id" placeholder="doc-...-rev-c"></label>
+            <label>Revision <input id="m-revision" placeholder="Rev. C"></label>
+            <label>Effective date <input id="m-date" placeholder="2026-01-15"></label>
+            <label>Type
+              <select id="m-type"><option>manual</option><option>loto</option><option>bulletin</option><option>policy</option></select>
+            </label>
+          </div>
+          <button type="submit">Upload and index</button>
+          <p id="upload-result" class="hint"></p>
+        </form>
+        <div class="card"><h3>Documents</h3><div id="doc-list"></div></div>
+        <div class="card"><h3>Model usage (last 7 days)</h3><div id="usage-list"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="/ui/app.js"></script>
+</body>
+</html>

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,25 @@ class Settings:
     llm_failure_threshold: int = 3
     llm_max_output_tokens: int = 1024
     llm_cooldown_seconds: float = 30.0
+    # USD per 1,000 tokens (input, output), by model name. Empty means every
+    # call is recorded with cost 0, which is correct for local models.
+    llm_prices: dict[str, tuple[float, float]] = field(default_factory=dict)
+
+    @staticmethod
+    def parse_prices(raw: str) -> dict[str, tuple[float, float]]:
+        """`{"model-name": [input_per_1k, output_per_1k]}`. A malformed value is
+        a startup error rather than silently recording zero cost."""
+        if not raw.strip():
+            return {}
+        try:
+            parsed = json.loads(raw)
+            return {
+                str(model): (float(pair[0]), float(pair[1])) for model, pair in parsed.items()
+            }
+        except (ValueError, TypeError, IndexError, AttributeError) as exc:
+            raise ValueError(
+                'LLM_PRICES must be JSON like {"model": [input_per_1k, output_per_1k]}'
+            ) from exc
 
     @staticmethod
     def from_env() -> Settings:
@@ -60,4 +80,5 @@ class Settings:
             llm_failure_threshold=int(env("LLM_FAILURE_THRESHOLD", "3")),
             llm_max_output_tokens=int(env("LLM_MAX_OUTPUT_TOKENS", "1024")),
             llm_cooldown_seconds=float(env("LLM_COOLDOWN_SECONDS", "30")),
+            llm_prices=Settings.parse_prices(env("LLM_PRICES", "")),
         )

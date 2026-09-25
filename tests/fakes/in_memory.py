@@ -215,6 +215,9 @@ class InMemoryLLMCallRepository(LLMCallRepository):
     async def calls_for_correlation(self, correlation_id: str) -> list[LLMCall]:
         return [c for c in self.calls if c.correlation_id == correlation_id]
 
+    async def calls_for_run(self, run_id: str) -> list[LLMCall]:
+        return [c for c in self.calls if c.run_id == run_id]
+
 
 class InMemoryChatSessionRepository(ChatSessionRepository):
     def __init__(self) -> None:

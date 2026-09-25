@@ -54,13 +54,20 @@ class PostgresLLMCallRepository(LLMCallRepository):
         rows = await self._pool.fetch(
             "SELECT * FROM llm_calls WHERE correlation_id = $1 ORDER BY call_id", correlation_id
         )
-        return [
-            LLMCall(
-                correlation_id=r["correlation_id"], user_id=r["user_id"], run_id=r["run_id"],
-                purpose=r["purpose"], provider=r["provider"], model=r["model"],
-                operation=r["operation"], input_tokens=r["input_tokens"],
-                output_tokens=r["output_tokens"], cost_usd=float(r["cost_usd"]),
-                latency_ms=r["latency_ms"], status=r["status"], created_at=r["created_at"],
-            )
-            for r in rows
-        ]
+        return [_to_call(r) for r in rows]
+
+    async def calls_for_run(self, run_id: str) -> list[LLMCall]:
+        rows = await self._pool.fetch(
+            "SELECT * FROM llm_calls WHERE run_id = $1 ORDER BY call_id", run_id
+        )
+        return [_to_call(r) for r in rows]
+
+
+def _to_call(r: asyncpg.Record) -> LLMCall:
+    return LLMCall(
+        correlation_id=r["correlation_id"], user_id=r["user_id"], run_id=r["run_id"],
+        purpose=r["purpose"], provider=r["provider"], model=r["model"],
+        operation=r["operation"], input_tokens=r["input_tokens"],
+        output_tokens=r["output_tokens"], cost_usd=float(r["cost_usd"]),
+        latency_ms=r["latency_ms"], status=r["status"], created_at=r["created_at"],
+    )

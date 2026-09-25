@@ -294,14 +294,17 @@ def test_a_work_order_round_trips_and_the_database_refuses_one_without_safety_st
     assert refused, "the DB-level CHECK is the second line of defence behind the domain rule"
 
 
-def test_usernames_are_unique():
+def test_creating_a_user_with_an_existing_username_never_overwrites_the_account():
+    """Seeding is idempotent (ON CONFLICT DO NOTHING), so re-running it cannot
+    reset a password or promote an existing account to another role."""
+
     async def go():
         async with scratch_database() as pool:
             users, _ = await seed_basics(pool)
-            try:
-                await users.create(User("u-other", "tech", Role.ADMIN), "hash")
-            except asyncpg.UniqueViolationError:
-                return True
-            return False
+            await users.create(User("u-other", "tech", Role.ADMIN), "different-hash")
+            return await users.get_by_username("tech")
 
-    assert run(go())
+    record = run(go())
+
+    assert record.user.user_id == "u-tech" and record.user.role == Role.TECHNICIAN
+    assert record.password_hash == "hash"

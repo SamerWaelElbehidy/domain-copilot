@@ -120,6 +120,7 @@ async def main(args: argparse.Namespace) -> int:
             system_prompt=load_prompt("answer_question", "v2").text,
             top_k=args.top_k,
             min_dense_score=args.min_dense_score,
+            min_support=args.min_support,
         )
 
         def show(result) -> None:
@@ -139,6 +140,7 @@ async def main(args: argparse.Namespace) -> int:
         "embed_model": settings.ollama_embed_model,
         "top_k": args.top_k,
         "min_dense_score": args.min_dense_score,
+        "min_support": args.min_support,
     }
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
@@ -176,7 +178,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--chat-model", default=os.environ.get("OLLAMA_CHAT_MODEL", "llama3.2:1b"))
     parser.add_argument("--top-k", type=int, default=5)
-    parser.add_argument("--min-dense-score", type=float, default=0.0)
+    parser.add_argument(
+        "--min-dense-score", type=float, default=Settings.from_env().relevance_threshold
+    )
+    parser.add_argument("--min-support", type=float, default=0.5)
     parser.add_argument("--label", default="baseline")
     parser.add_argument("--limit", type=int, default=0)
     sys.exit(asyncio.run(main(parser.parse_args())))

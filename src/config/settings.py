@@ -20,6 +20,7 @@ class Settings:
     ollama_base_url: str
     ollama_chat_model: str
     ollama_embed_model: str
+    relevance_threshold: float
 
     @staticmethod
     def from_env() -> Settings:
@@ -36,4 +37,7 @@ class Settings:
             ollama_base_url=env("OLLAMA_BASE_URL", "http://localhost:11434"),
             ollama_chat_model=env("OLLAMA_CHAT_MODEL", "llama3.2:1b"),
             ollama_embed_model=env("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
+            # Calibrated for nomic-embed-text cosine scores on the golden set
+            # (docs/EVALUATION.md); recalibrate if the embedding model changes.
+            relevance_threshold=float(env("RELEVANCE_THRESHOLD", "0.73")),
         )

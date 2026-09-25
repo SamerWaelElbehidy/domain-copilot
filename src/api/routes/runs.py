@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from api.container import Container
 from api.deps import current_user, get_container, require
+from application.pii import redact_pii
 from application.use_cases.replay_run import replay_run
 from domain.entities.run import Run
 from domain.entities.user import User
@@ -87,17 +88,18 @@ async def start_run(
     body: StartRunRequest,
     user: User = Depends(_can_start),
     container: Container = Depends(get_container),
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Starts the workflow in the background and returns at once; follow
     progress at GET /runs/{id}/events."""
     _ready(container)
     if container.ask_limiter is not None and not container.ask_limiter.allow(f"run:{user.user_id}"):
         raise HTTPException(status_code=429, detail="too many runs, slow down")
-    symptom = _CONTROL_CHARS.sub("", body.symptom).strip()
+    redaction = redact_pii(_CONTROL_CHARS.sub("", body.symptom).strip())
+    symptom = redaction.text
     if len(symptom) < 5:
         raise HTTPException(status_code=422, detail="symptom is empty after cleaning")
     run_id = await container.run_manager.submit(symptom, user.user_id)  # type: ignore[union-attr]
-    return {"run_id": run_id}
+    return {"run_id": run_id, "redactions": redaction.counts}
 
 
 @router.get("/runs")
@@ -203,7 +205,7 @@ async def decide(
         run_id,
         reviewer=user.username,
         decision=body.decision,
-        comment=_CONTROL_CHARS.sub("", body.comment),
+        comment=redact_pii(_CONTROL_CHARS.sub("", body.comment)).text,
         edits=body.edits,
     )
     wo = await container.orchestrator.work_order_of(done)  # type: ignore[union-attr]
@@ -217,9 +219,23 @@ async def trace(
     """The full audit record with the hash chain and whether it verifies."""
     _ready(container)
     run = await _visible_run(run_id, user, container)
+    calls = await container.llm_calls.calls_for_run(run_id) if container.llm_calls else []
     return {
         **_summary(run),
         "chain_valid": run.verify_chain(),
+        "usage": {
+            "calls": len(calls),
+            "input_tokens": sum(c.input_tokens for c in calls),
+            "output_tokens": sum(c.output_tokens for c in calls),
+            "cost_usd": round(sum(c.cost_usd for c in calls), 6),
+            "by_call": [
+                {"provider": c.provider, "model": c.model, "operation": c.operation,
+                 "status": c.status, "latency_ms": c.latency_ms,
+                 "input_tokens": c.input_tokens, "output_tokens": c.output_tokens,
+                 "correlation_id": c.correlation_id}
+                for c in calls
+            ],
+        },
         "steps": [
             {
                 "step_index": s.step_index,

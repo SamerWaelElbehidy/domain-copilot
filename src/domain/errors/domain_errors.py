@@ -71,3 +71,15 @@ class UnsupportedDocumentError(DomainError):
 class NoExtractableTextError(UnsupportedDocumentError):
     """The file parsed but contains no text layer (for example a scan).
     OCR is out of scope for this variant, so this is a reported failure."""
+
+
+class InvalidCredentialsError(DomainError):
+    """Login failed. Deliberately does not say whether the username exists."""
+
+
+class InvalidTokenError(DomainError):
+    """A bearer token is missing, malformed, expired, or not ours."""
+
+
+class PermissionDeniedError(DomainError):
+    """The authenticated user's role does not grant this action (FR-8)."""

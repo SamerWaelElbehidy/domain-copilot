@@ -18,7 +18,6 @@ from application.agents.diagnostic_planner import DiagnosticSafetyPlanner
 from application.agents.symptom_matcher import SymptomMatcher
 from application.agents.tool_catalog import build_tool_registry
 from application.agents.work_order_generator import WorkOrderGenerator
-from application.llm_recording import RecordingLLMProvider
 from application.use_cases.answer_question import GroundedAnswerer
 from application.use_cases.authenticate_user import make_dummy_hash
 from application.use_cases.orchestrator import CopilotOrchestrator
@@ -26,7 +25,7 @@ from config.api_settings import ApiSettings
 from config.prompts import load_prompt
 from config.settings import Settings
 from infrastructure.documents.pypdf_extractor import PypdfTextExtractor
-from infrastructure.llm.ollama_provider import OllamaProvider
+from infrastructure.llm.factory import build_llm
 from infrastructure.persistence.postgres_chat_session_repository import (
     PostgresChatSessionRepository,
 )
@@ -66,16 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             return (await client.get(f"{settings.ollama_base_url}/api/version")).status_code == 200
 
     llm_calls = PostgresLLMCallRepository(pool)
-    llm = RecordingLLMProvider(
-        OllamaProvider(
-            base_url=settings.ollama_base_url,
-            chat_model=settings.ollama_chat_model,
-            embed_model=settings.ollama_embed_model,
-            timeout_seconds=120.0,
-        ),
-        llm_calls,
-        provider_name="ollama",
-    )
+    llm = build_llm(settings, llm_calls)
     vector_store = QdrantVectorStore(
         url=settings.qdrant_url,
         collection_name=settings.qdrant_collection,

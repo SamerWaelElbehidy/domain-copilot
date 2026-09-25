@@ -21,6 +21,14 @@ class Settings:
     ollama_chat_model: str
     ollama_embed_model: str
     relevance_threshold: float
+    llm_provider_chain: tuple[str, ...] = ("ollama",)
+    embedding_provider: str = "ollama"
+    openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_chat_model: str = "gpt-4o-mini"
+    llm_timeout_seconds: float = 120.0
+    llm_failure_threshold: int = 3
+    llm_cooldown_seconds: float = 30.0
 
     @staticmethod
     def from_env() -> Settings:
@@ -40,4 +48,14 @@ class Settings:
             # Calibrated for nomic-embed-text cosine scores on the golden set
             # (docs/EVALUATION.md); recalibrate if the embedding model changes.
             relevance_threshold=float(env("RELEVANCE_THRESHOLD", "0.73")),
+            llm_provider_chain=tuple(
+                n.strip() for n in env("LLM_PROVIDER_CHAIN", "ollama").split(",") if n.strip()
+            ),
+            embedding_provider=env("EMBEDDING_PROVIDER", "ollama"),
+            openai_api_key=env("OPENAI_API_KEY", ""),
+            openai_base_url=env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+            openai_chat_model=env("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+            llm_timeout_seconds=float(env("LLM_TIMEOUT_SECONDS", "120")),
+            llm_failure_threshold=int(env("LLM_FAILURE_THRESHOLD", "3")),
+            llm_cooldown_seconds=float(env("LLM_COOLDOWN_SECONDS", "30")),
         )

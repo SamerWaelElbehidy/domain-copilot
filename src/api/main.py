@@ -11,7 +11,7 @@ import httpx
 from fastapi import FastAPI
 
 from api.app import create_app
-from api.container import Container
+from api.container import Container, IngestionDeps
 from api.rate_limit import TokenBucketLimiter
 from api.run_manager import RunManager
 from application.agents.diagnostic_planner import DiagnosticSafetyPlanner
@@ -25,6 +25,7 @@ from application.use_cases.orchestrator import CopilotOrchestrator
 from config.api_settings import ApiSettings
 from config.prompts import load_prompt
 from config.settings import Settings
+from infrastructure.documents.pypdf_extractor import PypdfTextExtractor
 from infrastructure.llm.ollama_provider import OllamaProvider
 from infrastructure.persistence.postgres_chat_session_repository import (
     PostgresChatSessionRepository,
@@ -139,6 +140,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         runs=run_repository,
         orchestrator=orchestrator,
         run_manager=run_manager,
+        documents=documents,
+        ingestion=IngestionDeps(
+            pdf_extractor=PypdfTextExtractor(),
+            llm_provider=llm,
+            vector_store=vector_store,
+            keyword_index=keyword_index,
+            document_repository=documents,
+        ),
     )
     try:
         yield

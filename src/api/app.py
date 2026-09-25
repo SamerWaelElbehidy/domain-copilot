@@ -16,7 +16,7 @@ from api.middleware import (
     SecurityHeadersMiddleware,
 )
 from api.rate_limit import TokenBucketLimiter
-from api.routes import ask, auth, health, runs, sessions
+from api.routes import ask, auth, documents, health, runs, sessions
 from application.correlation import get_correlation_id
 from config.api_settings import ApiSettings
 from domain.errors.domain_errors import (
@@ -27,6 +27,7 @@ from domain.errors.domain_errors import (
     PermissionDeniedError,
     TamperedRunError,
     UnapprovedDispatchError,
+    UnsupportedDocumentError,
 )
 
 DESCRIPTION = """
@@ -89,11 +90,16 @@ def create_app(
     async def _tampered(_: Request, exc: TamperedRunError) -> JSONResponse:
         return _error(409, "the audit log for this run failed hash-chain verification")
 
+    @app.exception_handler(UnsupportedDocumentError)
+    async def _bad_document(_: Request, exc: UnsupportedDocumentError) -> JSONResponse:
+        return _error(422, str(exc))
+
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(ask.router)
     app.include_router(sessions.router)
     app.include_router(runs.router)
+    app.include_router(documents.router)
 
     # Added innermost first; the last one added is the outermost.
     app.add_middleware(ErrorBoundaryMiddleware)

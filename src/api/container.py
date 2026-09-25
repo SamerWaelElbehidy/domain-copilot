@@ -6,13 +6,30 @@ from dataclasses import dataclass, field
 from api.rate_limit import TokenBucketLimiter
 from api.run_manager import RunManager
 from application.ports.chat_session_repository import ChatSessionRepository
+from application.ports.document_repository import DocumentRepository
+from application.ports.keyword_search_index import KeywordSearchIndex
 from application.ports.llm_call_repository import LLMCallRepository
+from application.ports.llm_provider import LLMProvider
+from application.ports.pdf_text_extractor import PdfTextExtractor
 from application.ports.run_repository import RunRepository
 from application.ports.security import PasswordHasher, TokenService
 from application.ports.user_repository import UserRepository
+from application.ports.vector_store import VectorStore
 from application.use_cases.answer_question import GroundedAnswerer
 from application.use_cases.orchestrator import CopilotOrchestrator
 from config.api_settings import ApiSettings
+
+
+@dataclass
+class IngestionDeps:
+    """Keyword arguments for `upload_document`, so the route stays free of
+    concrete adapters."""
+
+    pdf_extractor: PdfTextExtractor
+    llm_provider: LLMProvider
+    vector_store: VectorStore
+    keyword_index: KeywordSearchIndex
+    document_repository: DocumentRepository
 
 
 @dataclass
@@ -35,3 +52,5 @@ class Container:
     runs: RunRepository | None = None
     orchestrator: CopilotOrchestrator | None = None
     run_manager: RunManager | None = None
+    documents: DocumentRepository | None = None
+    ingestion: IngestionDeps | None = None

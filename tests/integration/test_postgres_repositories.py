@@ -146,12 +146,40 @@ def test_a_run_round_trips_with_its_owner_and_a_valid_hash_chain():
     assert {r.run_id for r in pending} == {"run-1", "run-2"} and dispatched == []
 
 
-def test_editing_a_stored_step_is_detected_after_reloading_from_the_database():
+def test_the_database_refuses_to_edit_delete_or_truncate_audit_steps():
+    async def go():
+        async with scratch_database() as pool:
+            await seed_basics(pool)
+            await PostgresRunRepository(pool).save(build_run("run-1", "u-tech"))
+            refused = []
+            for statement in (
+                "UPDATE run_steps SET name = 'x' WHERE run_id = 'run-1'",
+                "DELETE FROM run_steps WHERE run_id = 'run-1'",
+                "TRUNCATE run_steps",
+            ):
+                try:
+                    await pool.execute(statement)
+                    refused.append(False)
+                except asyncpg.RestrictViolationError:
+                    refused.append(True)
+            return refused, await PostgresRunRepository(pool).get("run-1")
+
+    refused, run_after = run(go())
+
+    assert refused == [True, True, True]
+    assert len(run_after.steps) == 3 and run_after.verify_chain()
+
+
+def test_a_privileged_edit_that_bypasses_the_trigger_is_still_detected_by_the_hash_chain():
+    """The second line of defence: someone who can disable the trigger can edit
+    a row, but the chain no longer verifies after reloading it."""
+
     async def go():
         async with scratch_database() as pool:
             await seed_basics(pool)
             runs = PostgresRunRepository(pool)
             await runs.save(build_run("run-1", "u-tech"))
+            await pool.execute("ALTER TABLE run_steps DISABLE TRIGGER run_steps_append_only")
             await pool.execute(
                 "UPDATE run_steps SET output_snapshot = $1::jsonb "
                 "WHERE run_id = 'run-1' AND step_index = 1",

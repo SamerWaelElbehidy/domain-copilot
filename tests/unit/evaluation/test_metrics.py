@@ -108,3 +108,11 @@ def test_an_infrastructure_error_is_a_failed_case_never_a_correct_refusal():
     assert "ConnectionError" in results[0].detail["error"]
     assert summarize(results)["errors"] == 3
     assert summarize(results)["refusal_correctness"] == 0.0
+
+
+def test_citing_the_right_chunk_with_a_degenerate_answer_is_not_correct():
+    obs = answered(text="1", cited=("allow the spindle to cool for 30 minutes",))
+
+    result = score_case(ANSWER_CASE, obs)
+
+    assert result.retrieval_hit and not result.answer_correct and not result.passed

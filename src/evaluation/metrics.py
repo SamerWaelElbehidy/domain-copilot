@@ -1,19 +1,13 @@
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from statistics import mean
 from typing import Any
 
+from application.use_cases.grounding import support_score
 from evaluation.golden_set import GoldenCase
 
-_STOPWORDS = {
-    "that", "this", "with", "from", "have", "must", "should", "before", "after", "when",
-    "than", "then", "them", "they", "their", "there", "which", "while", "will", "your",
-    "into", "only", "also", "such", "each", "every", "been", "being", "does", "were",
-    "what", "where", "about", "above", "below", "other", "these", "those", "would",
-}
 GROUNDED_SUPPORT_THRESHOLD = 0.6
 
 
@@ -54,22 +48,8 @@ def _contains_any(texts: tuple[str, ...], needles: tuple[str, ...]) -> bool:
     return any(n in t for n in needles for t in lowered)
 
 
-def _content_tokens(text: str) -> set[str]:
-    return {
-        w for w in re.findall(r"[a-z0-9.]+", text.lower()) if len(w) >= 4 and w not in _STOPWORDS
-    }
-
-
 def groundedness(answer_text: str, cited_texts: tuple[str, ...]) -> float:
-    """Deterministic proxy: the share of the answer's content words that
-    also occur in the cited chunks. It catches an answer that says things
-    its citations do not contain; it cannot judge paraphrase or logic, and
-    the report says so."""
-    answer_tokens = _content_tokens(answer_text)
-    if not answer_tokens:
-        return 0.0
-    support = _content_tokens(" ".join(cited_texts))
-    return len(answer_tokens & support) / len(answer_tokens)
+    return support_score(answer_text, cited_texts)
 
 
 def score_case(case: GoldenCase, obs: Observation) -> CaseResult:
@@ -83,7 +63,13 @@ def score_case(case: GoldenCase, obs: Observation) -> CaseResult:
 
     if case.expect == "answer":
         hit = _contains_any(obs.retrieved_texts, case.gold_snippets)
-        correct = answered and _contains_any(obs.cited_texts, case.gold_snippets)
+        # Citing the right chunk is not enough: the answer text itself must be
+        # supported by what it cites, or "1" / an invented value would count.
+        correct = (
+            answered
+            and _contains_any(obs.cited_texts, case.gold_snippets)
+            and (grounded or 0.0) >= GROUNDED_SUPPORT_THRESHOLD
+        )
         return CaseResult(case, obs, retrieval_hit=hit, answer_correct=correct,
                           groundedness=grounded, passed=bool(correct))
 

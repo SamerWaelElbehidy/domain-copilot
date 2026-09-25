@@ -43,7 +43,7 @@ class Settings:
             qdrant_collection=env("QDRANT_COLLECTION", "chunks"),
             embedding_dim=int(env("EMBEDDING_DIM", "768")),
             ollama_base_url=env("OLLAMA_BASE_URL", "http://localhost:11434"),
-            ollama_chat_model=env("OLLAMA_CHAT_MODEL", "llama3.2:1b"),
+            ollama_chat_model=env("OLLAMA_CHAT_MODEL", "qwen2.5:3b"),
             ollama_embed_model=env("OLLAMA_EMBED_MODEL", "nomic-embed-text"),
             # Calibrated for nomic-embed-text cosine scores on the golden set
             # (docs/EVALUATION.md); recalibrate if the embedding model changes.

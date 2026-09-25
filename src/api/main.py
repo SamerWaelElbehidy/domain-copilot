@@ -15,6 +15,7 @@ from api.container import Container, IngestionDeps
 from api.rate_limit import TokenBucketLimiter
 from api.run_manager import RunManager
 from application.agents.diagnostic_planner import DiagnosticSafetyPlanner
+from application.agents.names import DIAGNOSTIC_PLANNER, SYMPTOM_MATCHER, WORK_ORDER_GENERATOR
 from application.agents.symptom_matcher import SymptomMatcher
 from application.agents.tool_catalog import build_tool_registry
 from application.agents.work_order_generator import WorkOrderGenerator
@@ -97,17 +98,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # answer with plain grounded RAG instead of nothing.
         return (await answerer.answer(symptom)).as_dict()
 
+    matcher_prompt = load_prompt("symptom_matcher")
+    planner_prompt = load_prompt("diagnostic_planner")
+    generator_prompt = load_prompt("work_order_generator")
     orchestrator = CopilotOrchestrator(
         matcher=SymptomMatcher(
             llm=llm, registry=registry, document_repository=documents,
-            system_prompt=load_prompt("symptom_matcher").text,
+            system_prompt=matcher_prompt.text,
         ),
         planner=DiagnosticSafetyPlanner(
-            llm=llm, registry=registry, system_prompt=load_prompt("diagnostic_planner").text
+            llm=llm, registry=registry, system_prompt=planner_prompt.text
         ),
         generator=WorkOrderGenerator(
-            llm=llm, registry=registry, system_prompt=load_prompt("work_order_generator").text
+            llm=llm, registry=registry, system_prompt=generator_prompt.text
         ),
+        # The audit log records exactly which prompt text produced each step.
+        prompt_versions={
+            SYMPTOM_MATCHER: f"{matcher_prompt.label}@{matcher_prompt.sha256[:12]}",
+            DIAGNOSTIC_PLANNER: f"{planner_prompt.label}@{planner_prompt.sha256[:12]}",
+            WORK_ORDER_GENERATOR: f"{generator_prompt.label}@{generator_prompt.sha256[:12]}",
+        },
         registry=registry,
         run_repository=run_repository,
         work_order_repository=work_orders,

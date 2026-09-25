@@ -41,7 +41,9 @@ def build_llm(settings: Settings, llm_calls: LLMCallRepository) -> FallbackLLMPr
             )
         else:
             raise RuntimeError(f"unknown provider '{name}' in LLM_PROVIDER_CHAIN")
-        providers.append((name, RecordingLLMProvider(inner, llm_calls, provider_name=name)))
+        providers.append((name, RecordingLLMProvider(
+                inner, llm_calls, provider_name=name, prices=settings.llm_prices
+            )))
     return FallbackLLMProvider(
         providers,
         embedding_provider=settings.embedding_provider,

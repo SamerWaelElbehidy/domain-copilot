@@ -44,7 +44,9 @@ def happy_script(world_for_ids: World) -> list[CompletionResult]:
     ]
 
 
-def make_orchestrator(world: World, sleeps=None, fallback=None, policy=NO_WAIT, emit=None):
+def make_orchestrator(
+    world: World, sleeps=None, fallback=None, policy=NO_WAIT, emit=None, prompt_versions=None
+):
     async def fake_sleep(seconds: float) -> None:
         if sleeps is not None:
             sleeps.append(seconds)
@@ -74,6 +76,7 @@ def make_orchestrator(world: World, sleeps=None, fallback=None, policy=NO_WAIT, 
         fallback=fallback,
         sleep=fake_sleep,
         emit=emit,
+        prompt_versions=prompt_versions,
     )
     return orchestrator, runs
 
@@ -346,3 +349,24 @@ def test_replay_refuses_a_run_whose_log_was_edited_after_the_fact():
 
     with pytest.raises(TamperedRunError):
         list(replay_run(result))
+
+
+def test_each_agent_step_records_which_prompt_version_produced_it():
+    world = scripted_world()
+    orchestrator, _ = make_orchestrator(
+        world,
+        prompt_versions={
+            "symptom_matcher": "symptom_matcher.v1@abc123",
+            "diagnostic_safety_planner": "diagnostic_planner.v1@def456",
+            "work_order_generator": "work_order_generator.v1@789abc",
+        },
+    )
+
+    result = run(orchestrator.start(SYMPTOM))
+
+    recorded = {s.name: s.input_snapshot["prompt"] for s in result.steps if s.agent_name}
+    assert recorded == {
+        "match_symptom": "symptom_matcher.v1@abc123",
+        "diagnose": "diagnostic_planner.v1@def456",
+        "draft_work_order": "work_order_generator.v1@789abc",
+    }

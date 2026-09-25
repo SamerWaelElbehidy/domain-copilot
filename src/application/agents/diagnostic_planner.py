@@ -23,6 +23,18 @@ def _citation(chunk: dict) -> Citation:
     )
 
 
+def _cited_chunk(step: dict, diagnostics: list[dict], by_id: dict[str, dict]) -> dict | None:
+    """Maps a step's citation back to a retrieved chunk. The model cites an
+    excerpt number (prompt v2); a literal chunk id is still accepted so v1
+    output keeps working. Anything else is not grounded."""
+    number = step.get("evidence")
+    if isinstance(number, str) and number.strip().isdigit():
+        number = int(number.strip())
+    if isinstance(number, int) and not isinstance(number, bool):
+        return diagnostics[number - 1] if 1 <= number <= len(diagnostics) else None
+    return by_id.get(step.get("chunk_id"))
+
+
 class DiagnosticSafetyPlanner:
     """Role: produce grounded diagnostic steps and the complete safety
     checklist. Tools: search_manual_chunks, get_safety_prerequisites.
@@ -76,9 +88,12 @@ class DiagnosticSafetyPlanner:
                 f"no safety prerequisites found for '{match.equipment_id}'; refusing to plan"
             )
 
+        # Numbered excerpts, not chunk ids: a small model asked to reproduce an
+        # opaque id invents a plausible one (the failure that made the first answer
+        # prompt refuse everything, docs/EVALUATION.md section 4).
         evidence = "\n\n".join(
-            f"[chunk_id={c['chunk_id']}] ({c['section_title']})\n{c['content']}"
-            for c in diagnostics
+            f"[{number}] ({c['section_title']})\n{c['content']}"
+            for number, c in enumerate(diagnostics, start=1)
         )
         loop = await run_tool_loop(
             llm=self._llm,
@@ -103,11 +118,12 @@ class DiagnosticSafetyPlanner:
         for step in steps:
             if not isinstance(step, dict) or not isinstance(step.get("text"), str):
                 raise AgentOutputError("each step must be an object with a text field")
-            chunk = by_id.get(step.get("chunk_id"))
+            chunk = _cited_chunk(step, diagnostics, by_id)
             if chunk is None:
+                cited_as = step.get('evidence', step.get('chunk_id'))
                 raise AgentOutputError(
-                    f"step cites unknown chunk_id {step.get('chunk_id')!r}; every step must "
-                    "be grounded in retrieved evidence"
+                    f"step cites evidence {cited_as!r} that was not retrieved; every step "
+                    "must be grounded in retrieved evidence"
                 )
             step_texts.append(step["text"].strip())
             cited[chunk["chunk_id"]] = _citation(chunk)

@@ -16,6 +16,9 @@ _SECTION_TYPE_BY_HEADING = {
     "revision history": SectionType.REVISION_HISTORY,
 }
 
+# Headings a source may use, in the lower-case form the PDF extractor matches.
+KNOWN_HEADINGS: tuple[str, ...] = tuple(_SECTION_TYPE_BY_HEADING)
+
 _HEADING_RE = re.compile(r"^##\s+(.*)$", re.MULTILINE)
 _NUMBERED_ITEM_RE = re.compile(r"^\d+\.\s+", re.MULTILINE)
 

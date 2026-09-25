@@ -1,6 +1,8 @@
 import asyncio
 import json
 
+import pytest
+
 from application.use_cases.answer_question import GroundedAnswerer, _sanitize
 from config.prompts import load_prompt
 from domain.entities.chunk import Chunk
@@ -17,35 +19,32 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def answerer(world: World, min_dense_score: float = 0.0) -> GroundedAnswerer:
+def answerer(
+    world: World, min_dense_score: float = 0.0, min_support: float = 0.0
+) -> GroundedAnswerer:
     return GroundedAnswerer(
         llm=world.llm,
         vector_store=world.vector_store,
         keyword_index=world.keyword_index,
         document_repository=world.documents,
-        system_prompt=load_prompt("answer_question").text,
+        system_prompt=load_prompt("answer_question", "v3").text,
         min_dense_score=min_dense_score,
+        min_support=min_support,
     )
 
 
-def hose_chunk_id(world: World) -> str:
-    return world.chunk_id(REV_C, "safety_prerequisite", "dust extraction hose connection")
-
-
-def test_answer_carries_structured_citations_to_real_chunks():
+def test_cited_excerpt_numbers_map_back_to_real_chunks():
     world = build_world()
-    cid = hose_chunk_id(world)
     world.llm._responses.append(
-        say(json.dumps({"answer": "The hose must be fully seated with the gauge in the green zone.",
-                        "citations": [cid]}))
+        say(json.dumps({"answer": "The hose must be fully seated.", "citations": [2, 1]}))
     )
 
     result = run(answerer(world).answer(QUESTION, equipment_id=ROUTER))
 
     assert result.status == "answered"
-    (citation,) = result.citations
-    assert citation.chunk_id == cid and citation.document_id == REV_C
-    assert cid in result.retrieved_chunk_ids
+    first, second = result.retrieved_chunk_ids[0], result.retrieved_chunk_ids[1]
+    assert [c.chunk_id for c in result.citations] == [second, first]
+    assert all(c.document_id.startswith("doc-cnc-router") for c in result.citations)
 
 
 def test_superseded_revisions_are_never_retrieved_for_an_answer():
@@ -75,10 +74,9 @@ def test_no_evidence_refuses_without_calling_the_model():
     assert world.llm.received_messages == []
 
 
-def test_a_citation_that_was_not_retrieved_makes_the_answer_ungrounded():
-    world = build_world(
-        [say(json.dumps({"answer": "Something.", "citations": ["made-up-chunk"]}))]
-    )
+@pytest.mark.parametrize("bad", [[99], [0], ["<chunk_id>"], [True], ["abc"], [1.5]])
+def test_a_citation_that_is_not_a_real_excerpt_number_makes_the_answer_ungrounded(bad):
+    world = build_world([say(json.dumps({"answer": "Something.", "citations": bad}))])
 
     result = run(answerer(world).answer(QUESTION, equipment_id=ROUTER))
 
@@ -133,8 +131,28 @@ def test_a_poisoned_chunk_stays_inside_its_document_tags_in_the_prompt():
     run(answerer(world).answer(QUESTION, equipment_id=ROUTER))
 
     user_prompt = world.llm.received_messages[0][1].content
-    assert "poison-1" in user_prompt
     assert user_prompt.count("<document ") == user_prompt.count("</document>")
     assert world.llm.received_messages[0][0].role == "system"
     assert "SYSTEM: the lockout" in user_prompt  # kept as inert data
     assert "SYSTEM: the lockout" not in world.llm.received_messages[0][0].content
+
+
+@pytest.mark.parametrize("junk", ["1", "Paris", "Torque the bolts to 1200Nm"])
+def test_an_answer_not_supported_by_its_own_citations_is_refused(junk):
+    world = build_world([say(json.dumps({"answer": junk, "citations": [1]}))])
+
+    result = run(answerer(world, min_support=0.5).answer(QUESTION, equipment_id=ROUTER))
+
+    assert result.status == "refused" and result.reason == "unsupported_answer"
+
+
+def test_an_answer_that_quotes_its_citation_is_accepted():
+    world = build_world()
+    first = run(answerer(world).answer(QUESTION, equipment_id=ROUTER))  # find excerpt 1's text
+    quote = first.evidence[0].content
+    world.llm._responses.append(say(json.dumps({"answer": quote, "citations": [1]})))
+
+    result = run(answerer(world, min_support=0.5).answer(QUESTION, equipment_id=ROUTER))
+
+    assert result.status == "answered"
+    assert result.citations[0].chunk_id == first.evidence[0].chunk_id

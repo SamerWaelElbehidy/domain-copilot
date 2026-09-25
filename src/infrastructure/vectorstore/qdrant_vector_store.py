@@ -22,8 +22,9 @@ class QdrantVectorStore(VectorStore):
         url: str = "http://localhost:6333",
         collection_name: str = "chunks",
         vector_size: int = 768,
+        timeout_seconds: int = 30,
     ) -> None:
-        self._client = AsyncQdrantClient(url=url)
+        self._client = AsyncQdrantClient(url=url, timeout=timeout_seconds)
         self._collection_name = collection_name
         self._vector_size = vector_size
 

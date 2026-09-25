@@ -18,6 +18,7 @@ from application.ports.keyword_search_index import KeywordSearchIndex
 from application.ports.llm_provider import LLMProvider, ToolDefinition
 from application.ports.vector_store import VectorStore
 from application.ports.work_order_repository import WorkOrderRepository
+from application.use_cases.hybrid_search import HybridResult
 from application.use_cases.scoped_search import scoped_search
 from domain.entities.chunk import Chunk
 from domain.entities.work_order import WorkOrder
@@ -59,10 +60,10 @@ def build_tool_registry(
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     approval_authority: ApprovalAuthority | None = None,
 ) -> ToolRegistry:
-    async def _search(
+    async def _search_detailed(
         query: str, equipment_id: str | None, section_type: str | None, top_k: int
-    ) -> list[Chunk]:
-        result = await scoped_search(
+    ) -> HybridResult:
+        return await scoped_search(
             llm_provider=llm_provider,
             vector_store=vector_store,
             keyword_index=keyword_index,
@@ -72,13 +73,15 @@ def build_tool_registry(
             section_type=section_type,
             top_k=top_k,
         )
-        return result.chunks
 
     async def search_manual_chunks(args: dict[str, Any]) -> dict[str, Any]:
-        chunks = await _search(
+        found = await _search_detailed(
             args["query"], args.get("equipment_id"), args.get("section_type"), args.get("top_k", 5)
         )
-        return {"chunks": [chunk_to_dict(c) for c in chunks]}
+        return {
+            "chunks": [chunk_to_dict(c) for c in found.chunks],
+            "quarantined": found.quarantined,
+        }
 
     async def get_document_revisions(args: dict[str, Any]) -> dict[str, Any]:
         documents = await document_repository.list_documents_for_equipment(args["equipment_id"])
@@ -96,16 +99,17 @@ def build_tool_registry(
         }
 
     async def get_safety_prerequisites(args: dict[str, Any]) -> dict[str, Any]:
-        chunks = await _search(
+        found = await _search_detailed(
             "safety prerequisites",
             args["equipment_id"],
             SectionType.SAFETY_PREREQUISITE.value,
             SAFETY_FETCH_LIMIT,
         )
-        if len(chunks) >= SAFETY_FETCH_LIMIT:
+        chunks = found.chunks
+        if len(chunks) + found.quarantined >= SAFETY_FETCH_LIMIT:
             raise SafetyFetchTruncatedError("safety prerequisite fetch may be truncated")
         chunks.sort(key=lambda c: (c.document_id, c.order_index))
-        return {"chunks": [chunk_to_dict(c) for c in chunks]}
+        return {"chunks": [chunk_to_dict(c) for c in chunks], "quarantined": found.quarantined}
 
     async def draft_work_order(args: dict[str, Any]) -> dict[str, Any]:
         try:

@@ -13,9 +13,10 @@ RRF_K = 60
 @dataclass(frozen=True)
 class HybridResult:
     chunks: list[Chunk]
+    quarantined: int = 0  # chunks withheld by the injection scan
     # Best dense (cosine) similarity among candidates. RRF only keeps rank
     # order, so this is the signal used to decide there is no real evidence.
-    top_dense_score: float
+    top_dense_score: float = 0.0
 
 
 async def hybrid_search_detailed(

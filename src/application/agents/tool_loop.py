@@ -61,7 +61,7 @@ async def run_tool_loop(
     result = LoopResult(content="")
 
     for _ in range(max_iterations):
-        completion = await llm.complete(messages, tools or None)
+        completion = await llm.complete(messages, tools or None, json_mode=not tools)
         result.input_tokens += completion.input_tokens
         result.output_tokens += completion.output_tokens
         result.model = completion.model or result.model

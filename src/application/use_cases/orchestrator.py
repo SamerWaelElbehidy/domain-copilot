@@ -26,7 +26,6 @@ from domain.errors.domain_errors import (
     MissingSafetyPrerequisiteError,
     StepFailedError,
 )
-from domain.value_objects.approval import ApprovalToken
 from domain.value_objects.run_state import ALLOWED_TRANSITIONS, RunState
 from domain.value_objects.run_step import RunStep
 
@@ -187,7 +186,7 @@ class CopilotOrchestrator:
         run.transition_to(RunState.APPROVED)
         await self._runs.save(run)
 
-        token = ApprovalToken(work_order.work_order_id, reviewer, now)
+        token = self._registry.approval_authority.issue(work_order.work_order_id, reviewer, now)
         started = self._clock()
         outcome = await self._registry.execute(
             ORCHESTRATOR, "dispatch_work_order",

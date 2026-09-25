@@ -99,7 +99,7 @@ def test_gated_tool_without_approval_is_refused_even_for_its_allowed_agent():
 def test_gated_tool_with_approval_token_executes():
     calls: list = []
     registry = make_registry(calls)
-    token = ApprovalToken("wo-1", "supervisor-1", datetime(2026, 1, 2))
+    token = registry.approval_authority.issue("wo-1", "supervisor-1", datetime(2026, 1, 2))
 
     result = run(
         registry.execute(
@@ -147,6 +147,94 @@ def test_only_side_effecting_tools_may_require_approval():
                 handler=handler,
                 allowed_agents=frozenset({"a"}),
                 side_effecting=False,
+                requires_approval=True,
+            )
+        )
+
+
+def gated_call(registry, token, work_order_id="wo-1"):
+    return run(
+        registry.execute(
+            "orchestrator", "dispatch_work_order", {"work_order_id": work_order_id}, approval=token
+        )
+    )
+
+
+def test_a_hand_built_token_is_refused_and_the_handler_never_runs():
+    calls: list = []
+    registry = make_registry(calls)
+    forged = ApprovalToken("wo-1", "supervisor-1", datetime(2026, 1, 2), signature="0" * 64)
+
+    with pytest.raises(ApprovalRequiredError):
+        gated_call(registry, forged)
+
+    assert calls == []
+
+
+def test_a_token_from_another_authority_is_refused():
+    calls: list = []
+    registry = make_registry(calls)
+    other = ToolRegistry()  # its own random authority
+    token = other.approval_authority.issue("wo-1", "supervisor-1", datetime(2026, 1, 2))
+
+    with pytest.raises(ApprovalRequiredError):
+        gated_call(registry, token)
+
+
+def test_a_token_for_one_work_order_cannot_dispatch_another():
+    calls: list = []
+    registry = make_registry(calls)
+    token = registry.approval_authority.issue("wo-1", "supervisor-1", datetime(2026, 1, 2))
+
+    with pytest.raises(ApprovalRequiredError):
+        gated_call(registry, token, work_order_id="wo-2")
+
+    assert calls == []
+
+
+def test_tampering_with_who_approved_invalidates_the_token():
+    from dataclasses import replace
+
+    registry = make_registry([])
+    token = registry.approval_authority.issue("wo-1", "supervisor-1", datetime(2026, 1, 2))
+
+    with pytest.raises(ApprovalRequiredError):
+        gated_call(registry, replace(token, approved_by="someone-else"))
+
+
+@pytest.mark.parametrize("not_a_token", ["approved", 1, {"work_order_id": "wo-1"}, object()])
+def test_non_token_objects_are_refused(not_a_token):
+    with pytest.raises(ApprovalRequiredError):
+        gated_call(make_registry([]), not_a_token)
+
+
+def test_a_tool_schema_with_an_unsupported_type_is_rejected_at_registration():
+    async def handler(args):
+        return None
+
+    with pytest.raises(ValueError):
+        ToolRegistry().register(
+            ToolSpec(
+                definition=ToolDefinition(
+                    "t", "d", {"type": "object", "properties": {"x": {"type": "null"}}}
+                ),
+                handler=handler,
+                allowed_agents=frozenset({"a"}),
+            )
+        )
+
+
+def test_a_gated_tool_must_take_a_work_order_id():
+    async def handler(args):
+        return None
+
+    with pytest.raises(ValueError):
+        ToolRegistry().register(
+            ToolSpec(
+                definition=ToolDefinition("t", "d", {"type": "object", "properties": {}}),
+                handler=handler,
+                allowed_agents=frozenset({"orchestrator"}),
+                side_effecting=True,
                 requires_approval=True,
             )
         )

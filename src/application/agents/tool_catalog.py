@@ -5,6 +5,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from application.agents.approval_authority import ApprovalAuthority
 from application.agents.names import (
     DIAGNOSTIC_PLANNER,
     ORCHESTRATOR,
@@ -56,6 +57,7 @@ def build_tool_registry(
     work_order_repository: WorkOrderRepository,
     id_factory: Callable[[], str] = lambda: f"wo-{uuid.uuid4().hex[:12]}",
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    approval_authority: ApprovalAuthority | None = None,
 ) -> ToolRegistry:
     async def _search(
         query: str, equipment_id: str | None, section_type: str | None, top_k: int
@@ -137,7 +139,7 @@ def build_tool_registry(
         "properties": {"equipment_id": string},
         "required": ["equipment_id"],
     }
-    registry = ToolRegistry()
+    registry = ToolRegistry(approval_authority)
     registry.register(
         ToolSpec(
             definition=ToolDefinition(

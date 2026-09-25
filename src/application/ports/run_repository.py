@@ -15,3 +15,10 @@ class RunRepository(ABC):
 
     @abstractmethod
     async def get(self, run_id: str) -> Run | None: ...
+
+    @abstractmethod
+    async def list_runs(
+        self, created_by: str | None = None, state: str | None = None, limit: int = 50
+    ) -> list[Run]:
+        """Newest first, without steps loaded (summaries only)."""
+        ...

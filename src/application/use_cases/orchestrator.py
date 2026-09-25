@@ -126,9 +126,20 @@ class CopilotOrchestrator:
 
     # ---- public API ---------------------------------------------------------
 
-    async def start(self, symptom: str) -> Run:
-        run = Run(run_id=self._id_factory(), equipment_id=None, started_at=self._clock())
+    async def begin(self, created_by: str | None = None) -> Run:
+        """Creates and persists the run so callers (the API) can hand back a
+        run id before the slow pipeline has finished."""
+        run = Run(
+            run_id=self._id_factory(), equipment_id=None, started_at=self._clock(),
+            created_by=created_by,
+        )
         await self._runs.save(run)
+        return run
+
+    async def start(self, symptom: str, created_by: str | None = None) -> Run:
+        return await self.execute(await self.begin(created_by), symptom)
+
+    async def execute(self, run: Run, symptom: str) -> Run:
         try:
             await self._pipeline(run, symptom)
         except asyncio.CancelledError:
@@ -337,6 +348,12 @@ class CopilotOrchestrator:
         raise StepFailedError(f"step '{step}' failed after {self._policy.max_attempts} attempts")
 
     # ---- helpers ---------------------------------------------------------------
+
+    async def work_order_of(self, run: Run) -> WorkOrder | None:
+        try:
+            return await self._work_order_for(run)
+        except InvalidRunTransitionError:
+            return None
 
     async def _work_order_for(self, run: Run) -> WorkOrder:
         for step in reversed(run.steps):

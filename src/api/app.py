@@ -16,13 +16,17 @@ from api.middleware import (
     SecurityHeadersMiddleware,
 )
 from api.rate_limit import TokenBucketLimiter
-from api.routes import ask, auth, health, sessions
+from api.routes import ask, auth, health, runs, sessions
 from application.correlation import get_correlation_id
 from config.api_settings import ApiSettings
 from domain.errors.domain_errors import (
     InvalidCredentialsError,
+    InvalidReviewEditError,
+    InvalidRunTransitionError,
     InvalidTokenError,
     PermissionDeniedError,
+    TamperedRunError,
+    UnapprovedDispatchError,
 )
 
 DESCRIPTION = """
@@ -69,10 +73,27 @@ def create_app(
     async def _forbidden(_: Request, exc: PermissionDeniedError) -> JSONResponse:
         return _error(403, "you do not have permission to do that")
 
+    @app.exception_handler(InvalidRunTransitionError)
+    async def _bad_transition(_: Request, exc: InvalidRunTransitionError) -> JSONResponse:
+        return _error(409, "that run is not in a state that allows this action")
+
+    @app.exception_handler(UnapprovedDispatchError)
+    async def _not_approved(_: Request, exc: UnapprovedDispatchError) -> JSONResponse:
+        return _error(409, "the work order is not in a state that allows this action")
+
+    @app.exception_handler(InvalidReviewEditError)
+    async def _bad_edit(_: Request, exc: InvalidReviewEditError) -> JSONResponse:
+        return _error(422, str(exc))
+
+    @app.exception_handler(TamperedRunError)
+    async def _tampered(_: Request, exc: TamperedRunError) -> JSONResponse:
+        return _error(409, "the audit log for this run failed hash-chain verification")
+
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(ask.router)
     app.include_router(sessions.router)
+    app.include_router(runs.router)
 
     # Added innermost first; the last one added is the outermost.
     app.add_middleware(ErrorBoundaryMiddleware)

@@ -28,8 +28,8 @@ class PostgresRunRepository(RunRepository):
         async with self._pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 """
-                INSERT INTO runs (run_id, equipment_id, started_at, state)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO runs (run_id, equipment_id, started_at, state, created_by)
+                VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT (run_id) DO UPDATE SET
                     equipment_id = EXCLUDED.equipment_id, state = EXCLUDED.state
                 """,
@@ -37,6 +37,7 @@ class PostgresRunRepository(RunRepository):
                 run.equipment_id,
                 _aware(run.started_at),
                 run.state.value,
+                run.created_by,
             )
             for step in run.steps:
                 await conn.execute(
@@ -93,4 +94,24 @@ class PostgresRunRepository(RunRepository):
             started_at=row["started_at"],
             state=RunState(row["state"]),
             steps=steps,
+            created_by=row["created_by"],
         )
+
+    async def list_runs(
+        self, created_by: str | None = None, state: str | None = None, limit: int = 50
+    ) -> list[Run]:
+        rows = await self._pool.fetch(
+            """
+            SELECT * FROM runs
+            WHERE ($1::text IS NULL OR created_by = $1) AND ($2::text IS NULL OR state = $2)
+            ORDER BY started_at DESC LIMIT $3
+            """,
+            created_by, state, limit,
+        )
+        return [
+            Run(
+                run_id=r["run_id"], equipment_id=r["equipment_id"], started_at=r["started_at"],
+                state=RunState(r["state"]), created_by=r["created_by"],
+            )
+            for r in rows
+        ]

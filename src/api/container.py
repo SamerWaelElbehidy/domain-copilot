@@ -4,11 +4,14 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from api.rate_limit import TokenBucketLimiter
+from api.run_manager import RunManager
 from application.ports.chat_session_repository import ChatSessionRepository
 from application.ports.llm_call_repository import LLMCallRepository
+from application.ports.run_repository import RunRepository
 from application.ports.security import PasswordHasher, TokenService
 from application.ports.user_repository import UserRepository
 from application.use_cases.answer_question import GroundedAnswerer
+from application.use_cases.orchestrator import CopilotOrchestrator
 from config.api_settings import ApiSettings
 
 
@@ -29,3 +32,6 @@ class Container:
     sessions: ChatSessionRepository | None = None
     llm_calls: LLMCallRepository | None = None
     ask_limiter: TokenBucketLimiter | None = None
+    runs: RunRepository | None = None
+    orchestrator: CopilotOrchestrator | None = None
+    run_manager: RunManager | None = None

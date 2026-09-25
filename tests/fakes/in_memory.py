@@ -158,6 +158,14 @@ class InMemoryRunRepository(RunRepository):
     async def get(self, run_id: str) -> Run | None:
         return self.runs.get(run_id)
 
+    async def list_runs(self, created_by=None, state=None, limit=50) -> list[Run]:
+        found = [
+            r for r in self.runs.values()
+            if (created_by is None or r.created_by == created_by)
+            and (state is None or r.state.value == state)
+        ]
+        return sorted(found, key=lambda r: r.started_at, reverse=True)[:limit]
+
 
 class InMemoryUserRepository(UserRepository):
     def __init__(self) -> None:

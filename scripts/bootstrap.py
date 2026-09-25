@@ -66,6 +66,14 @@ def embed_model_ready() -> bool:
     return any(n == wanted or n.startswith(wanted + ":") for n in names)
 
 
+def flag(name: str, default: bool) -> bool:
+    """A boolean setting from the environment. Unset or empty means the default,
+    because compose passes unset variables through as empty strings, and an empty
+    string must never turn a default-on setting off (or a default-off one on)."""
+    value = (os.environ.get(name) or "").strip().lower()
+    return default if not value else value == "true"
+
+
 def run_script(name: str) -> int:
     return subprocess.run([sys.executable, str(ROOT / "scripts" / name)], check=False).returncode
 
@@ -77,12 +85,12 @@ def main() -> None:
         sys.exit("migrations failed")
 
     development = os.environ.get("APP_ENV", "development") == "development"
-    # Unset or empty means "only in development": production never gets demo accounts.
-    seed_users = os.environ.get("SEED_DEMO_USERS") or ("true" if development else "false")
-    if seed_users == "true":
+    # Default: demo accounts only in development, so a production start never
+    # creates accounts with a published password.
+    if flag("SEED_DEMO_USERS", default=development):
         run_script("seed_users.py")
 
-    if (os.environ.get("SEED_CORPUS") or "true") == "true":
+    if flag("SEED_CORPUS", default=True):
         # The corpus has to be embedded, so wait for the embedding model. A
         # failure here is logged, not fatal: /health/ready will show the state
         # and the corpus can be ingested later from the admin page.

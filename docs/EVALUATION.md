@@ -58,7 +58,7 @@ Reading it honestly:
 
 ## 3. Failure analysis
 
-### 3.1 A confident wrong safety value from a conflicting memo (real, unfixed in this baseline)
+### 3.1 A confident wrong safety value from a conflicting memo (found by this baseline; fixed in section 8)
 
 `C02` asks for the minimum spray-booth face velocity. The manual says 0.5 m/s; a
 contradicting memo fixture says 0.3 m/s. qwen answered **"0.3 m/s"**, citing only the
@@ -66,7 +66,7 @@ memo, with no warning that sources disagree. This is the most serious failure in
 a wrong number that a technician acts on, produced with full citations. The support
 guard cannot catch it because the wrong value *is* in the cited chunk. `C01` (collet
 runout) was refused by the model, which is the safe outcome but happened by luck of
-model behaviour, not by design. A retrieval-time conflict guard is the next change.
+model behaviour, not by design. Section 8 records the fix and its measured effect.
 
 ### 3.2 Refusals that should have been answers
 
@@ -140,3 +140,39 @@ The first run indexes the corpus and fixtures into a separate `dc_eval` database
 `eval_chunks` collection (several minutes); later runs reuse them. Output goes to
 `eval/results/<label>.md` and `.json`. Earlier, superseded runs are kept in
 `eval/results/history/` as evidence for section 4.
+
+## 8. After the conflict guard
+
+The failure in 3.1 led to a check in the answerer: a numeric claim in the answer is compared
+with values in other retrieved documents about the same equipment (or a facility-wide policy)
+whose surrounding text shares at least three content words. A mismatch withholds the answer
+and reports both values and both sources.
+
+Same configuration as the qwen2.5:3b column in section 2, run again with the guard
+(`eval/results/after-conflict-guard-qwen2.5-3b.md`):
+
+| Metric | Before | After |
+|---|---|---|
+| Conflicting sources handled | 50% | 100% |
+| Answer accuracy | 73% | 73% |
+| False-refusal rate | 23% | 23% |
+| Refusal correctness | 100% | 100% |
+| Injection resisted | 100% | 100% |
+| Overall pass rate | 80% | 83% |
+
+Exactly one case changed: `C02` went from a confident "0.3 m/s" to a refusal that reports
+"0.5 m/s (doc-spray-booth-sfb300-rev-a) versus 0.3 m/s (doc-spray-booth-sfb300-memo-fv-conflict)".
+Nothing else moved, so there is no measured regression on the golden set.
+
+**How the guard was tuned.** Every chunk of the 30 real documents was treated as a cited answer
+and compared with every chunk of every other current document, and the test requires zero hits.
+The first version flagged six false conflicts: a glue-pot limit of 60C against a press platen
+limit of 40C (two different machines), and 40C against 90C and 80C inside the kiln manual
+(three different thresholds that share the words "chamber temperature"). Comparing only within
+the same equipment (or against a facility-wide policy) and raising the shared-context minimum
+from two words to three brought that to zero, while the booth and collet memos are still caught.
+
+**What it does not cover.** It checks numeric claims only. A qualitative contradiction (one
+document says a step is required, another says it is optional) is not detected. Because this
+was tuned on the same 35 cases it is evaluated on, the 100% figure is optimistic and should be
+read as "the two known conflicts are caught and none of the real documents trigger it".

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncpg
 
-from application.ports.document_repository import DocumentRepository
+from application.ports.document_repository import DocumentRepository, DocumentStatusRow
 from domain.entities.equipment import Equipment
 from domain.entities.manual_document import ManualDocument
 
@@ -84,6 +84,19 @@ class PostgresDocumentRepository(DocumentRepository):
             status,
             error,
         )
+
+    async def list_with_status(self) -> list[DocumentStatusRow]:
+        rows = await self._pool.fetch(
+            "SELECT document_id, equipment_id, revision, effective_date, title, doc_type, status, "
+            "ingestion_status, ingestion_error FROM manual_documents "
+            "ORDER BY effective_date DESC, document_id"
+        )
+        return [
+            DocumentStatusRow(
+                _row_to_document(r), r["ingestion_status"], r["ingestion_error"]
+            )
+            for r in rows
+        ]
 
     async def list_current_document_ids(self, equipment_id: str | None = None) -> list[str]:
         if equipment_id is None:

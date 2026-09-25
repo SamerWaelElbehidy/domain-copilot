@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from domain.entities.equipment import Equipment
 from domain.entities.manual_document import ManualDocument
+
+
+@dataclass(frozen=True)
+class DocumentStatusRow:
+    document: ManualDocument
+    ingestion_status: str
+    ingestion_error: str | None
 
 
 class DocumentRepository(ABC):
@@ -38,4 +46,9 @@ class DocumentRepository(ABC):
     async def list_current_document_ids(self, equipment_id: str | None = None) -> list[str]:
         """Ids of non-superseded documents. Every agent retrieval is
         restricted to these, so stale revisions are never cited."""
+        ...
+
+    @abstractmethod
+    async def list_with_status(self) -> list[DocumentStatusRow]:
+        """Every document with its ingestion status, newest effective date first."""
         ...

@@ -1,0 +1,16 @@
+# Optional: run the bundled Ollama on an NVIDIA GPU.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#
+# Needs an NVIDIA GPU and, on Windows, Docker Desktop with the WSL 2 backend and a
+# current NVIDIA driver (on Linux, the NVIDIA Container Toolkit). Without a GPU the
+# default file works, only slower: expect tens of seconds per answer on a CPU.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

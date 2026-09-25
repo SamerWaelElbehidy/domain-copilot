@@ -79,6 +79,10 @@ services:
   # 2 GB) into the ollama_models volume; later starts reuse them.
   ollama:
     image: ollama/ollama:0.34.4
+    environment:
+      # Keep the model in memory between questions; a cold load on CPU can
+      # take longer than a request is allowed to wait.
+      OLLAMA_KEEP_ALIVE: 24h
     ports:
       - "11434:11434"
     volumes:
@@ -99,7 +103,8 @@ services:
     entrypoint:
       - sh
       - -c
-      - ollama pull ${OLLAMA_EMBED_MODEL:-nomic-embed-text} && ollama pull ${OLLAMA_CHAT_MODEL:-qwen2.5:3b}
+      # Pull both models, then load the chat model once so the first user question is not the cold one.
+      - ollama pull ${OLLAMA_EMBED_MODEL:-nomic-embed-text} && ollama pull ${OLLAMA_CHAT_MODEL:-qwen2.5:3b} && ollama run ${OLLAMA_CHAT_MODEL:-qwen2.5:3b} "ready" > /dev/null
     restart: "no"
 
 volumes:

@@ -47,7 +47,14 @@ class RecordingLLMProvider(LLMProvider):
         self._clock = clock
 
     async def _record(
-        self, operation: str, model: str, tin: int, tout: int, started: float, status: str
+        self,
+        operation: str,
+        model: str,
+        tin: int,
+        tout: int,
+        started: float,
+        status: str,
+        provider: str = "",
     ) -> None:
         context = get_usage_context()
         await self._repository.record(
@@ -56,7 +63,7 @@ class RecordingLLMProvider(LLMProvider):
                 user_id=context.user_id,
                 run_id=context.run_id,
                 purpose=context.purpose,
-                provider=self._provider_name,
+                provider=provider or self._provider_name,
                 model=model,
                 operation=operation,
                 input_tokens=tin,
@@ -81,7 +88,8 @@ class RecordingLLMProvider(LLMProvider):
             await self._record("complete", "", 0, 0, started, "error")
             raise
         await self._record(
-            "complete", result.model, result.input_tokens, result.output_tokens, started, "ok"
+            "complete", result.model, result.input_tokens, result.output_tokens, started, "ok",
+            result.provider,
         )
         return result
 
@@ -93,11 +101,11 @@ class RecordingLLMProvider(LLMProvider):
     ) -> AsyncIterator[StreamEvent]:
         started = time.perf_counter()
         inner = self._inner.stream(messages, tools, json_mode)
-        status, model, tin, tout = "cancelled", "", 0, 0
+        status, model, tin, tout, served_by = "cancelled", "", 0, 0, ""
         try:
             async for event in inner:
                 if event.kind == "done":
-                    status, model = "ok", event.model
+                    status, model, served_by = "ok", event.model, event.provider
                     tin, tout = event.input_tokens, event.output_tokens
                 yield event
         except asyncio.CancelledError:
@@ -109,7 +117,9 @@ class RecordingLLMProvider(LLMProvider):
             # Closing the inner iterator is what stops generation upstream when
             # the client goes away (FR-6).
             await inner.aclose()
-            await asyncio.shield(self._record("stream", model, tin, tout, started, status))
+            await asyncio.shield(
+                self._record("stream", model, tin, tout, started, status, served_by)
+            )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         started = time.perf_counter()

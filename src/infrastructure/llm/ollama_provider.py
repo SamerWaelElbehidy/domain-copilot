@@ -13,6 +13,7 @@ from application.ports.llm_provider import (
     ToolCall,
     ToolDefinition,
 )
+from infrastructure.llm.http_errors import translate
 
 
 class OllamaProvider(LLMProvider):
@@ -28,14 +29,19 @@ class OllamaProvider(LLMProvider):
         timeout_seconds: float = 60.0,
         temperature: float = 0.0,
         seed: int | None = 42,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._chat_model = chat_model
         self._embed_model = embed_model
         self._timeout = timeout_seconds
+        self._transport = transport
         self._options: dict = {"temperature": temperature}
         if seed is not None:
             self._options["seed"] = seed
+
+    def _client(self) -> httpx.AsyncClient:
+        return httpx.AsyncClient(timeout=self._timeout, transport=self._transport)
 
     async def complete(
         self,
@@ -46,10 +52,13 @@ class OllamaProvider(LLMProvider):
         payload = self._build_chat_payload(messages, tools, stream=False)
         if json_mode and not tools:
             payload["format"] = "json"
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(f"{self._base_url}/api/chat", json=payload)
-            response.raise_for_status()
-            return self._parse_completion(response.json())
+        try:
+            async with self._client() as client:
+                response = await client.post(f"{self._base_url}/api/chat", json=payload)
+                response.raise_for_status()
+                return self._parse_completion(response.json())
+        except httpx.HTTPError as exc:
+            raise translate(exc, "ollama") from None
 
     async def stream(
         self,
@@ -61,45 +70,51 @@ class OllamaProvider(LLMProvider):
         if json_mode and not tools:
             payload["format"] = "json"
         usage = StreamEvent(kind="done")
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            async with client.stream(
-                "POST", f"{self._base_url}/api/chat", json=payload
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
-                    chunk = json.loads(line)
-                    message = chunk.get("message", {})
+        try:
+            async with self._client() as client:
+                async with client.stream(
+                    "POST", f"{self._base_url}/api/chat", json=payload
+                ) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if not line.strip():
+                            continue
+                        chunk = json.loads(line)
+                        message = chunk.get("message", {})
 
-                    content = message.get("content", "")
-                    if content:
-                        yield StreamEvent(kind="token", text=content)
+                        content = message.get("content", "")
+                        if content:
+                            yield StreamEvent(kind="token", text=content)
 
-                    for raw_call in message.get("tool_calls", []) or []:
-                        yield StreamEvent(
-                            kind="tool_call",
-                            tool_call=_parse_tool_call(raw_call),
-                        )
+                        for raw_call in message.get("tool_calls", []) or []:
+                            yield StreamEvent(
+                                kind="tool_call",
+                                tool_call=_parse_tool_call(raw_call),
+                            )
 
-                    if chunk.get("done"):
-                        usage = StreamEvent(
-                            kind="done",
-                            input_tokens=chunk.get("prompt_eval_count", 0),
-                            output_tokens=chunk.get("eval_count", 0),
-                            model=chunk.get("model", ""),
-                        )
-                        break
+                        if chunk.get("done"):
+                            usage = StreamEvent(
+                                kind="done",
+                                input_tokens=chunk.get("prompt_eval_count", 0),
+                                output_tokens=chunk.get("eval_count", 0),
+                                model=chunk.get("model", ""),
+                            )
+                            break
+        except httpx.HTTPError as exc:
+            raise translate(exc, "ollama") from None
         yield usage
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.post(
-                f"{self._base_url}/api/embed",
-                json={"model": self._embed_model, "input": texts},
-            )
-            response.raise_for_status()
-            return response.json()["embeddings"]
+        try:
+            async with self._client() as client:
+                response = await client.post(
+                    f"{self._base_url}/api/embed",
+                    json={"model": self._embed_model, "input": texts},
+                )
+                response.raise_for_status()
+                return response.json()["embeddings"]
+        except httpx.HTTPError as exc:
+            raise translate(exc, "ollama") from None
 
     def _build_chat_payload(
         self,

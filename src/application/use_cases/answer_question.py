@@ -8,6 +8,7 @@ from application.ports.document_repository import DocumentRepository
 from application.ports.keyword_search_index import KeywordSearchIndex
 from application.ports.llm_provider import LLMProvider, Message
 from application.ports.vector_store import VectorStore
+from application.use_cases.conflict_check import find_conflict
 from application.use_cases.grounding import support_score
 from application.use_cases.scoped_search import scoped_search
 from domain.entities.chunk import Chunk
@@ -26,6 +27,7 @@ class Answer:
     retrieved_chunk_ids: tuple[str, ...]
     top_dense_score: float
     evidence: tuple[Chunk, ...] = ()
+    detail: str | None = None  # e.g. which sources disagree
     input_tokens: int = 0
     output_tokens: int = 0
     model: str = ""
@@ -35,6 +37,7 @@ class Answer:
             "status": self.status,
             "answer": self.text,
             "reason": self.reason,
+            "detail": self.detail,
             "citations": [c.__dict__ for c in self.citations],
         }
 
@@ -65,9 +68,12 @@ def _as_excerpt_numbers(raw: object, available: int) -> list[int]:
     return numbers
 
 
-def _refuse(reason: str, chunks: list[Chunk], top: float, **usage) -> Answer:
+def _refuse(
+    reason: str, chunks: list[Chunk], top: float, detail: str | None = None, **usage
+) -> Answer:
     return Answer(
-        "refused", "", (), reason, tuple(c.chunk_id for c in chunks), top, tuple(chunks), **usage
+        "refused", "", (), reason, tuple(c.chunk_id for c in chunks), top, tuple(chunks),
+        detail, **usage,
     )
 
 
@@ -80,7 +86,9 @@ class GroundedAnswerer:
     and an answer is accepted only if every excerpt number it cites exists
     (excerpts are numbered in the prompt and mapped back to chunk ids here)
     and the answer's own words must be supported by the excerpts it cites, so
-    a bare "1" or an invented value is refused rather than shown.
+    a bare "1" or an invented value is refused rather than shown. If another
+    retrieved document states a different value for the same measurement, the
+    answer is withheld and the disagreement is reported instead.
     "Not enough information" is a correct and required answer."""
 
     def __init__(
@@ -164,6 +172,17 @@ class GroundedAnswerer:
         cited_texts = [chunks[n - 1].content for n in numbers]
         if support_score(text, cited_texts) < self._min_support:
             return _refuse("unsupported_answer", chunks, top, **usage)
+
+        cited_chunks = [chunks[n - 1] for n in numbers]
+        conflict = find_conflict(
+            answer_text=text,
+            cited=cited_chunks,
+            others=[c for c in chunks if c not in cited_chunks],
+        )
+        if conflict is not None:
+            return _refuse(
+                "conflicting_sources", chunks, top, detail=conflict.describe(), **usage
+            )
 
         return Answer(
             "answered", text.strip(), citations, None,

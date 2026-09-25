@@ -77,10 +77,12 @@ def main() -> None:
         sys.exit("migrations failed")
 
     development = os.environ.get("APP_ENV", "development") == "development"
-    if os.environ.get("SEED_DEMO_USERS", "true" if development else "false") == "true":
+    # Unset or empty means "only in development": production never gets demo accounts.
+    seed_users = os.environ.get("SEED_DEMO_USERS") or ("true" if development else "false")
+    if seed_users == "true":
         run_script("seed_users.py")
 
-    if os.environ.get("SEED_CORPUS", "true") == "true":
+    if (os.environ.get("SEED_CORPUS") or "true") == "true":
         # The corpus has to be embedded, so wait for the embedding model. A
         # failure here is logged, not fatal: /health/ready will show the state
         # and the corpus can be ingested later from the admin page.

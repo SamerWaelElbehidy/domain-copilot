@@ -2,7 +2,7 @@
 groundedness, refusal correctness and injection resistance (FR-3).
 
 Usage:
-  python scripts/evaluate.py [--chat-model llama3.2:1b] [--top-k 5]
+  python scripts/evaluate.py [--chat-model qwen2.5:3b] [--top-k 5]
                              [--min-dense-score 0.0] [--label baseline] [--limit N]
 
 It uses its own database (dc_eval) and Qdrant collection (eval_chunks), so
@@ -178,7 +178,7 @@ async def main(args: argparse.Namespace) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--chat-model", default=os.environ.get("OLLAMA_CHAT_MODEL", "llama3.2:1b"))
+    parser.add_argument("--chat-model", default=os.environ.get("OLLAMA_CHAT_MODEL", "qwen2.5:3b"))
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument(
         "--min-dense-score", type=float, default=Settings.from_env().relevance_threshold

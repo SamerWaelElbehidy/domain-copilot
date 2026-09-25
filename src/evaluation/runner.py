@@ -36,8 +36,16 @@ async def run_evaluation(
     results: list[CaseResult] = []
     for case in cases:
         started = time.perf_counter()
-        answer = await answer_fn(case.question)
-        result = score_case(case, to_observation(answer, time.perf_counter() - started))
+        try:
+            answer = await answer_fn(case.question)
+            observation = to_observation(answer, time.perf_counter() - started)
+        except Exception as exc:  # noqa: BLE001 - one bad case must not end the run
+            observation = Observation(
+                status="error",
+                reason=f"{type(exc).__name__}: {exc}",
+                latency_seconds=time.perf_counter() - started,
+            )
+        result = score_case(case, observation)
         results.append(result)
         if on_result:
             on_result(result)

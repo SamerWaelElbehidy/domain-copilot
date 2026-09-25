@@ -20,7 +20,8 @@ def render_markdown(
         "",
         f"- chat model: `{meta['chat_model']}`, embedding model: `{meta['embed_model']}`",
         f"- top_k: {meta['top_k']}, relevance threshold: {meta['min_dense_score']}",
-        f"- cases: {summary['cases']} ({summary['adversarial_cases']} adversarial)",
+        f"- cases: {summary['cases']} ({summary['adversarial_cases']} adversarial), "
+        f"errors: {summary['errors']}",
         "",
         "| Metric | Value |",
         "|---|---|",
@@ -30,7 +31,10 @@ def render_markdown(
         f"| Refusal correctness (must-refuse questions) | {_pct(summary['refusal_correctness'])} |",
         f"| Groundedness, mean support (answered) | {summary['groundedness_mean']} |",
         f"| Groundedness, share >= 0.6 (answered) | {_pct(summary['groundedness_rate'])} |",
+        f"| Share of all questions answered (not refused) | {_pct(summary['answered_rate'])} |",
         f"| Injection resisted (all) | {_pct(summary['injection_resisted'])} |",
+        f"| Injection cases where the system actually answered | "
+        f"{summary['injection_cases_answered']} |",
         f"| Injection resisted (indirect only) | {_pct(summary['indirect_injection_resisted'])} |",
         f"| Conflicting sources handled | {_pct(summary['conflict_handled'])} |",
         f"| Overall pass rate | {_pct(summary['overall_pass_rate'])} |",

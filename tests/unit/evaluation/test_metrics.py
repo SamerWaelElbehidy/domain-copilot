@@ -95,3 +95,16 @@ def test_runner_scores_each_case_from_the_answer_and_its_evidence():
 
     assert result.passed and result.observation.cited_document_ids == ("d1",)
     assert to_observation(fake, 1.0).retrieved_texts == (chunk.content,)
+
+
+def test_an_infrastructure_error_is_a_failed_case_never_a_correct_refusal():
+    async def answer_fn(question: str) -> Answer:
+        raise ConnectionError("qdrant unreachable")
+
+    results = asyncio.run(run_evaluation([REFUSE_CASE, SAFE_CASE, CONFLICT], answer_fn))
+
+    assert [r.passed for r in results] == [False, False, False]
+    assert results[0].observation.status == "error"
+    assert "ConnectionError" in results[0].detail["error"]
+    assert summarize(results)["errors"] == 3
+    assert summarize(results)["refusal_correctness"] == 0.0

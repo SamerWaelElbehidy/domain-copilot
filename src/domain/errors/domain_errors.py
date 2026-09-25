@@ -61,3 +61,15 @@ class StepFailedError(DomainError):
 class InvalidReviewEditError(DomainError):
     """A reviewer edit would weaken a work order (for example, drop a safety
     step). Reviewers may add safety steps, never remove them."""
+
+
+class InvalidCredentialsError(DomainError):
+    """Login failed. Deliberately does not say whether the username exists."""
+
+
+class InvalidTokenError(DomainError):
+    """A bearer token is missing, malformed, expired, or not ours."""
+
+
+class PermissionDeniedError(DomainError):
+    """The authenticated user's role does not grant this action (FR-8)."""

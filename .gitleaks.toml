@@ -1,0 +1,15 @@
+title = "Domain Copilot gitleaks config"
+
+[extend]
+useDefault = true
+
+# Two synthetic strings that were committed as test literals before the test
+# switched to generating its secrets at run time. They protect nothing. The
+# allowlist matches only these exact strings, so every other finding, in tests
+# or anywhere else, still fails the scan.
+[allowlist]
+description = "synthetic JWT test secrets committed earlier in this PR"
+regexes = [
+  '''a-test-secret-that-is-long-enough-for-hs256-0123456789''',
+  '''some-other-secret-that-is-also-long-enough-0000000''',
+]

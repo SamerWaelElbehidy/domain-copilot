@@ -6,12 +6,14 @@ from typing import Any
 from application.ports.document_repository import DocumentRepository
 from application.ports.keyword_search_index import KeywordSearchIndex
 from application.ports.run_repository import RunRepository
+from application.ports.user_repository import UserRecord, UserRepository
 from application.ports.vector_store import ScoredChunk, VectorStore
 from application.ports.work_order_repository import WorkOrderRepository
 from domain.entities.chunk import Chunk
 from domain.entities.equipment import Equipment
 from domain.entities.manual_document import ManualDocument
 from domain.entities.run import Run
+from domain.entities.user import User
 from domain.entities.work_order import WorkOrder
 
 
@@ -149,3 +151,18 @@ class InMemoryRunRepository(RunRepository):
 
     async def get(self, run_id: str) -> Run | None:
         return self.runs.get(run_id)
+
+
+class InMemoryUserRepository(UserRepository):
+    def __init__(self) -> None:
+        self.records: dict[str, UserRecord] = {}
+
+    async def get_by_username(self, username: str) -> UserRecord | None:
+        return next((r for r in self.records.values() if r.user.username == username), None)
+
+    async def get_by_id(self, user_id: str) -> User | None:
+        record = self.records.get(user_id)
+        return record.user if record else None
+
+    async def create(self, user: User, password_hash: str) -> None:
+        self.records[user.user_id] = UserRecord(user, password_hash)

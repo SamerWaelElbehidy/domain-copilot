@@ -36,6 +36,7 @@ class CompletionResult:
     input_tokens: int = 0
     output_tokens: int = 0
     model: str = ""
+    provider: str = ""  # which provider of a fallback chain served it
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,18 @@ class StreamEvent:
     input_tokens: int = 0  # set on the "done" event
     output_tokens: int = 0
     model: str = ""
+    provider: str = ""
+
+
+class ProviderUnavailableError(ConnectionError):
+    """The provider cannot serve this request now (down, timed out, rate
+    limited, bad key). Subclasses ConnectionError so the orchestrator's
+    retry policy treats it as retryable, and a fallback chain fails over."""
+
+
+class ProviderRejectedError(RuntimeError):
+    """The provider refused this particular request (a 4xx that another
+    provider would refuse too). Not retried and not failed over."""
 
 
 class LLMProvider(ABC):

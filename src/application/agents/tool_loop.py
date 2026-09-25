@@ -27,6 +27,7 @@ class LoopResult:
     input_tokens: int = 0
     output_tokens: int = 0
     model: str = ""
+    provider: str = ""
 
     def retrieved_chunks(self) -> list[dict[str, Any]]:
         """Every chunk any tool returned during the loop -- the evidence an
@@ -65,6 +66,7 @@ async def run_tool_loop(
         result.input_tokens += completion.input_tokens
         result.output_tokens += completion.output_tokens
         result.model = completion.model or result.model
+        result.provider = completion.provider or result.provider
 
         if not completion.tool_calls:
             result.content = completion.content

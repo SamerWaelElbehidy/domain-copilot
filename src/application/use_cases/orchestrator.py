@@ -254,21 +254,21 @@ class CopilotOrchestrator:
         async def action() -> StepOutcome:
             result, loop = await self._matcher.run(symptom)
             return StepOutcome(result, {"result": jsonable(result), **loop_snapshot(loop)},
-                               loop.input_tokens, loop.output_tokens, loop.model)
+                               loop.input_tokens, loop.output_tokens, loop.provider or loop.model)
         return action
 
     def _diagnose(self, symptom: str, match: Any) -> Callable[[], Awaitable[StepOutcome]]:
         async def action() -> StepOutcome:
             plan, loop = await self._planner.run(symptom, match)
             return StepOutcome(plan, {"result": jsonable(plan), **loop_snapshot(loop)},
-                               loop.input_tokens, loop.output_tokens, loop.model)
+                               loop.input_tokens, loop.output_tokens, loop.provider or loop.model)
         return action
 
     def _draft(self, symptom: str, match: Any, plan: Any) -> Callable[[], Awaitable[StepOutcome]]:
         async def action() -> StepOutcome:
             draft, loop = await self._generator.run(symptom, match, plan)
             return StepOutcome(draft, {"result": jsonable(draft), **loop_snapshot(loop)},
-                               loop.input_tokens, loop.output_tokens, loop.model)
+                               loop.input_tokens, loop.output_tokens, loop.provider or loop.model)
         return action
 
     # ---- the FR-5 step wrapper ----------------------------------------------

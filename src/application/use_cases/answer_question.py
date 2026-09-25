@@ -94,6 +94,7 @@ class GroundedAnswerer:
         top_k: int = 5,
         min_dense_score: float = 0.0,
         min_support: float = 0.5,
+        filter_suspicious: bool = True,
     ) -> None:
         self._llm = llm
         self._vector_store = vector_store
@@ -103,6 +104,7 @@ class GroundedAnswerer:
         self._top_k = top_k
         self._min_dense_score = min_dense_score
         self._min_support = min_support
+        self._filter_suspicious = filter_suspicious
 
     async def answer(self, question: str, equipment_id: str | None = None) -> Answer:
         found = await scoped_search(
@@ -113,6 +115,7 @@ class GroundedAnswerer:
             query=question,
             equipment_id=equipment_id,
             top_k=self._top_k,
+            filter_suspicious=self._filter_suspicious,
         )
         chunks, top = found.chunks, found.top_dense_score
         if not chunks:

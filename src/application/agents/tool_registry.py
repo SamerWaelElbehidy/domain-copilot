@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from application.agents.approval_authority import ApprovalAuthority
 from application.ports.llm_provider import ToolDefinition
 from domain.errors.domain_errors import (
     ApprovalRequiredError,
@@ -51,7 +52,9 @@ def validate_arguments(schema: dict[str, Any], arguments: Any) -> None:
         expected = properties[key].get("type")
         if expected is None:
             continue
-        allowed_types = _JSON_TYPES[expected]
+        allowed_types = _JSON_TYPES.get(expected)
+        if allowed_types is None:
+            raise InvalidToolArgumentsError(f"unsupported schema type '{expected}'")
         if isinstance(value, bool) and expected != "boolean":
             raise InvalidToolArgumentsError(f"argument '{key}' must be {expected}")
         if not isinstance(value, allowed_types):
@@ -67,8 +70,9 @@ class ToolRegistry:
     allow-list, schema validation, and the human-approval requirement
     for gated tools, then executes."""
 
-    def __init__(self) -> None:
+    def __init__(self, approval_authority: ApprovalAuthority | None = None) -> None:
         self._tools: dict[str, ToolSpec] = {}
+        self.approval_authority = approval_authority or ApprovalAuthority()
 
     def register(self, spec: ToolSpec) -> None:
         name = spec.definition.name
@@ -76,6 +80,16 @@ class ToolRegistry:
             raise ValueError(f"tool '{name}' already registered")
         if spec.requires_approval and not spec.side_effecting:
             raise ValueError(f"tool '{name}': only side-effecting tools can require approval")
+        if spec.requires_approval and "work_order_id" not in spec.definition.parameters.get(
+            "properties", {}
+        ):
+            raise ValueError(
+                f"tool '{name}': a gated tool must take work_order_id "
+                "so approval can be bound to it"
+            )
+        for key, prop in spec.definition.parameters.get("properties", {}).items():
+            if prop.get("type") is not None and prop["type"] not in _JSON_TYPES:
+                raise ValueError(f"tool '{name}': argument '{key}' has unsupported type")
         self._tools[name] = spec
 
     def definitions_for(self, agent_name: str) -> list[ToolDefinition]:
@@ -92,10 +106,16 @@ class ToolRegistry:
         arguments: Any,
         approval: ApprovalToken | None = None,
     ) -> Any:
+        """A gated tool runs only with a token issued by this registry's
+        ApprovalAuthority for the same work_order_id as the call's arguments."""
         spec = self._tools.get(tool_name)
         if spec is None or agent_name not in spec.allowed_agents:
             raise ToolNotAllowedError(f"agent '{agent_name}' may not call tool '{tool_name}'")
         validate_arguments(spec.definition.parameters, arguments)
-        if spec.requires_approval and approval is None:
-            raise ApprovalRequiredError(f"tool '{tool_name}' requires human approval")
+        if spec.requires_approval and not self.approval_authority.verify(
+            approval, arguments.get("work_order_id")
+        ):
+            raise ApprovalRequiredError(
+                f"tool '{tool_name}' requires a valid human approval for this work order"
+            )
         return await spec.handler(arguments)

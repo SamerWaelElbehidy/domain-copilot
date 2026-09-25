@@ -8,6 +8,24 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Real Postgres so the migrations and adapters are exercised on every PR.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: domain_copilot
+          POSTGRES_PASSWORD: domain_copilot_dev
+          POSTGRES_DB: domain_copilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U domain_copilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,7 +41,7 @@ jobs:
           docker build -q -t domain-copilot:ci .
       - name: Lint
         run: ruff check src tests scripts
-      - name: Tests (live Ollama tests skip automatically)
+      - name: Tests (live Ollama tests skip automatically; Postgres tests run)
         run: python -m pytest tests -q
       - name: Dependency scan
         run: pip-audit -r requirements.lock

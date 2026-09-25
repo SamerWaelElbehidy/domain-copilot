@@ -18,6 +18,7 @@ class Run:
     started_at: datetime
     state: RunState = RunState.RECEIVED
     steps: list[RunStep] = field(default_factory=list)
+    created_by: str | None = None
 
     def transition_to(self, new_state: RunState) -> None:
         allowed = ALLOWED_TRANSITIONS[self.state]

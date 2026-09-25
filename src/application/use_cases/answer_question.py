@@ -44,6 +44,26 @@ def _sanitize(text: str) -> str:
     return _TAG.sub("", text)
 
 
+def _as_excerpt_numbers(raw: object, available: int) -> list[int]:
+    """Excerpts are numbered 1..N in the prompt and the model cites those
+    numbers; code maps them back to chunk ids. Anything that is not a valid
+    excerpt number (including an empty list) yields [] and the answer is
+    treated as ungrounded."""
+    if not isinstance(raw, list) or not raw:
+        return []
+    numbers: list[int] = []
+    for item in raw:
+        if isinstance(item, bool):
+            return []
+        if isinstance(item, str) and item.strip().isdigit():
+            item = int(item.strip())
+        if not isinstance(item, int) or not 1 <= item <= available:
+            return []
+        if item not in numbers:
+            numbers.append(item)
+    return numbers
+
+
 def _refuse(reason: str, chunks: list[Chunk], top: float, **usage) -> Answer:
     return Answer(
         "refused", "", (), reason, tuple(c.chunk_id for c in chunks), top, tuple(chunks), **usage
@@ -56,8 +76,9 @@ class GroundedAnswerer:
 
     Grounding is enforced in code, not trusted to the model: no evidence or
     a dense score below `min_dense_score` refuses before any model call,
-    and an answer is accepted only if every cited chunk_id was actually
-    retrieved. "Not enough information" is a correct and required answer."""
+    and an answer is accepted only if every excerpt number it cites exists
+    (excerpts are numbered in the prompt and mapped back to chunk ids here).
+    "Not enough information" is a correct and required answer."""
 
     def __init__(
         self,
@@ -95,9 +116,8 @@ class GroundedAnswerer:
             return _refuse("below_relevance_threshold", chunks, top)
 
         evidence = "\n\n".join(
-            f'<document chunk_id="{c.chunk_id}" source="{c.source_ref}">\n'
-            f"{_sanitize(c.content)}\n</document>"
-            for c in chunks
+            f'<document id="{n}">\n{_sanitize(c.content)}\n</document>'
+            for n, c in enumerate(chunks, start=1)
         )
         completion = await self._llm.complete(
             [
@@ -119,25 +139,19 @@ class GroundedAnswerer:
         if parsed.get("insufficient") is True:
             return _refuse("model_judged_insufficient", chunks, top, **usage)
 
-        text, cited_ids = parsed.get("answer"), parsed.get("citations")
-        by_id = {c.chunk_id: c for c in chunks}
-        if (
-            not isinstance(text, str)
-            or not text.strip()
-            or not isinstance(cited_ids, list)
-            or not cited_ids
-            or any(cid not in by_id for cid in cited_ids)
-        ):
+        text = parsed.get("answer")
+        numbers = _as_excerpt_numbers(parsed.get("citations"), len(chunks))
+        if not isinstance(text, str) or not text.strip() or not numbers:
             return _refuse("ungrounded_answer", chunks, top, **usage)
 
         citations = tuple(
             Citation(
-                chunk_id=cid,
-                document_id=by_id[cid].document_id,
-                section_title=by_id[cid].section_title,
-                source_ref=by_id[cid].source_ref,
+                chunk_id=chunks[n - 1].chunk_id,
+                document_id=chunks[n - 1].document_id,
+                section_title=chunks[n - 1].section_title,
+                source_ref=chunks[n - 1].source_ref,
             )
-            for cid in dict.fromkeys(cited_ids)
+            for n in numbers
         )
         return Answer(
             "answered", text.strip(), citations, None,

@@ -117,7 +117,7 @@ async def main(args: argparse.Namespace) -> int:
             vector_store=vector_store,
             keyword_index=keyword_index,
             document_repository=documents,
-            system_prompt=load_prompt("answer_question").text,
+            system_prompt=load_prompt("answer_question", "v2").text,
             top_k=args.top_k,
             min_dense_score=args.min_dense_score,
         )

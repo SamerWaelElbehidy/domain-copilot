@@ -12,7 +12,14 @@ _STOPWORDS = {
 
 def content_tokens(text: str) -> set[str]:
     words = (w.strip(".") for w in re.findall(r"[a-z0-9.]+", text.lower()))
-    return {w for w in words if len(w) >= 4 and w not in _STOPWORDS}
+    # Numbers and units ("40c", "30", "0.5") are the facts a technician acts on,
+    # so short tokens containing a digit count; a lone digit ("1") does not.
+    return {
+        w
+        for w in words
+        if (len(w) >= 4 and w not in _STOPWORDS)
+        or (len(w) >= 2 and any(ch.isdigit() for ch in w))
+    }
 
 
 def support_score(answer_text: str, cited_texts: tuple[str, ...] | list[str]) -> float:

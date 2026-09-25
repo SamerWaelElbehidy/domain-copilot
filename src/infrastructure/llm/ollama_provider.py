@@ -26,11 +26,16 @@ class OllamaProvider(LLMProvider):
         chat_model: str = "llama3.2:1b",
         embed_model: str = "nomic-embed-text",
         timeout_seconds: float = 60.0,
+        temperature: float = 0.0,
+        seed: int | None = 42,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._chat_model = chat_model
         self._embed_model = embed_model
         self._timeout = timeout_seconds
+        self._options: dict = {"temperature": temperature}
+        if seed is not None:
+            self._options["seed"] = seed
 
     async def complete(
         self,
@@ -96,6 +101,9 @@ class OllamaProvider(LLMProvider):
             "model": self._chat_model,
             "messages": [_message_to_dict(m) for m in messages],
             "stream": stream,
+            # Deterministic by default: retrieval-grounded answers and the
+            # evaluation must not change from run to run.
+            "options": self._options,
         }
         if tools:
             payload["tools"] = [_tool_to_dict(t) for t in tools]

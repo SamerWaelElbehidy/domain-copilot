@@ -20,6 +20,7 @@ from api.middleware import (
 from api.rate_limit import TokenBucketLimiter
 from api.routes import ask, auth, documents, health, runs, sessions
 from application.correlation import get_correlation_id
+from application.ports.llm_provider import ProviderUnavailableError
 from config.api_settings import ApiSettings
 from domain.errors.domain_errors import (
     InvalidCredentialsError,
@@ -75,6 +76,15 @@ def create_app(
     @app.exception_handler(PermissionDeniedError)
     async def _forbidden(_: Request, exc: PermissionDeniedError) -> JSONResponse:
         return _error(403, "you do not have permission to do that")
+
+    @app.exception_handler(ProviderUnavailableError)
+    async def _model_down(_: Request, exc: ProviderUnavailableError) -> JSONResponse:
+        # Every configured model provider failed or timed out. Say so, and say
+        # it is worth retrying; never expose provider names or upstream detail.
+        return _error(
+            503, "the language model is not available right now, please try again",
+            {"Retry-After": "10"},
+        )
 
     @app.exception_handler(InvalidRunTransitionError)
     async def _bad_transition(_: Request, exc: InvalidRunTransitionError) -> JSONResponse:

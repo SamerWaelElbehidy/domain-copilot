@@ -298,3 +298,50 @@ def test_only_the_orchestrator_may_dispatch_and_only_with_approval():
         run(world.registry.execute(WORK_ORDER_GENERATOR, "dispatch_work_order", args))
     with pytest.raises(ApprovalRequiredError):
         run(world.registry.execute(ORCHESTRATOR, "dispatch_work_order", args))
+
+
+def planner_v2(world):
+    return DiagnosticSafetyPlanner(
+        llm=world.llm,
+        registry=world.registry,
+        system_prompt=load_prompt("diagnostic_planner", "v2").text,
+    )
+
+
+def test_the_planner_shows_the_model_numbered_excerpts_never_chunk_ids():
+    world = build_world([say(json.dumps({"insufficient": True}))])
+
+    with pytest.raises(LowEvidenceError):
+        run(planner_v2(world).run(SYMPTOM, router_match(world)))
+
+    prompt = world.llm.received_messages[0][-1].content
+    assert "[1]" in prompt and "chunk_id" not in prompt and "::" not in prompt
+
+
+def test_a_step_that_cites_an_excerpt_number_is_mapped_back_to_the_real_chunk():
+    reply = json.dumps({"steps": [{"text": "Check the intake.", "evidence": 1}]})
+    world = build_world([say(reply)])
+
+    plan, _ = run(planner_v2(world).run(SYMPTOM, router_match(world)))
+
+    cited = {c.chunk_id for c in plan.citations}
+    assert plan.diagnostic_steps == ("Check the intake.",)
+    assert any("::diagnostic::" in chunk_id for chunk_id in cited)
+    assert len(plan.safety_checklist) == 13
+
+
+@pytest.mark.parametrize("evidence", [0, 99, -1, "abc", True, None])
+def test_an_excerpt_number_that_does_not_exist_is_rejected_not_guessed(evidence):
+    bad = {"steps": [{"text": "Do a thing.", "evidence": evidence}]}
+    world = build_world([say(json.dumps(bad))])
+
+    with pytest.raises(AgentOutputError):
+        run(planner_v2(world).run(SYMPTOM, router_match(world)))
+
+
+def test_a_numeric_string_excerpt_number_is_accepted():
+    world = build_world([say(json.dumps({"steps": [{"text": "Check it.", "evidence": "1"}]}))])
+
+    plan, _ = run(planner_v2(world).run(SYMPTOM, router_match(world)))
+
+    assert plan.diagnostic_steps == ("Check it.",)

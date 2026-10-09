@@ -74,6 +74,38 @@ def flag(name: str, default: bool) -> bool:
     return default if not value else value == "true"
 
 
+def ingested_documents() -> int:
+    import asyncio
+
+    import asyncpg
+
+    async def count() -> int:
+        conn = await asyncpg.connect(
+            user=os.environ.get("POSTGRES_USER", "domain_copilot"),
+            password=os.environ.get("POSTGRES_PASSWORD", "domain_copilot_dev"),
+            database=os.environ.get("POSTGRES_DB", "domain_copilot"),
+            host=os.environ.get("POSTGRES_HOST", "localhost"),
+            port=int(os.environ.get("POSTGRES_PORT", "5433")),
+        )
+        try:
+            return await conn.fetchval(
+                "SELECT count(*) FROM manual_documents WHERE ingestion_status = 'ingested'"
+            )
+        finally:
+            await conn.close()
+
+    return asyncio.run(count())
+
+
+def needs_corpus_seed(mode: str, ingested: int, expected: int) -> bool:
+    """`SEED_CORPUS`: `true` (default) seeds only when the bundled corpus is not
+    fully ingested yet, so restarting a container does not re-embed everything;
+    `force` always re-ingests; `false` never does."""
+    if mode == "false":
+        return False
+    return mode == "force" or ingested < expected
+
+
 def run_script(name: str) -> int:
     return subprocess.run([sys.executable, str(ROOT / "scripts" / name)], check=False).returncode
 
@@ -90,10 +122,14 @@ def main() -> None:
     if flag("SEED_DEMO_USERS", default=development):
         run_script("seed_users.py")
 
-    if flag("SEED_CORPUS", default=True):
+    expected = len(list((ROOT / "corpus").rglob("*.md")))
+    mode = (os.environ.get("SEED_CORPUS") or "true").strip().lower()
+    if not needs_corpus_seed(mode, ingested_documents(), expected):
+        log("corpus already ingested (set SEED_CORPUS=force to re-ingest)")
+    else:
         # The corpus has to be embedded, so wait for the embedding model. A
-        # failure here is logged, not fatal: /health/ready will show the state
-        # and the corpus can be ingested later from the admin page.
+        # failure here is logged, not fatal: /ready will show the state and the
+        # corpus can be ingested later from the admin page.
         if wait_for("embedding model", embed_model_ready, 900):
             if run_script("seed.py") != 0:
                 log("corpus seeding reported failures; see output above")

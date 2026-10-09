@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         return (await answerer.answer(symptom)).as_dict()
 
     matcher_prompt = load_prompt("symptom_matcher")
-    planner_prompt = load_prompt("diagnostic_planner")
+    planner_prompt = load_prompt("diagnostic_planner", "v2")
     generator_prompt = load_prompt("work_order_generator")
     orchestrator = CopilotOrchestrator(
         matcher=SymptomMatcher(

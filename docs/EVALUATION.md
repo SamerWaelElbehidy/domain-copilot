@@ -174,6 +174,42 @@ limit of 40C (two different machines), and 40C against 90C and 80C inside the ki
 the same equipment (or against a facility-wide policy) and raising the shared-context minimum
 from two words to three brought that to zero, while the booth and collet memos are still caught.
 
+## 9. Reproduced in the packaged container, and one change that was tried and reverted
+
+**Reproduction.** Section 2's numbers were measured on a bare local Ollama install. After the
+Docker/GPU packaging work (`docker compose -f docker-compose.yml -f docker-compose.gpu.yml up`),
+the same configuration was run again from inside the container, on an NVIDIA GPU instead of CPU
+(`eval/results/docker-gpu-baseline.md`): retrieval hit-rate 100%, answer accuracy 73%, false-refusal
+rate 23%, refusal correctness 100%, overall pass rate 83% — identical to the figures in section 2
+within rounding. Mean latency dropped from about 4.6 s to 3.5 s per question (CPU → GPU). This is
+one run, not independent confirmation of the numbers' generality (see "threats to validity" above),
+but it does rule out "the result was an artifact of the bare-metal setup."
+
+**A keyword-retrieval change that was tried and not merged.** The Postgres keyword side of hybrid
+retrieval used `plainto_tsquery`, which ANDs every word together — a natural-language question like
+"the machine gets too hot when running for hours" matches zero rows, because no single chunk
+contains all of those exact words. An OR-of-stemmed-terms query (ranked by how many terms match)
+was built and tested against a real database (15 new tests, including a check that query text
+cannot inject `tsquery` operators or SQL). It was then run through the full evaluation:
+
+| Metric | plainto_tsquery (AND) | OR-of-terms |
+|---|---|---|
+| Answer accuracy | 73% | 68% |
+| Overall pass rate | 83% | 80% |
+| Groundedness, mean support | 0.79 | 0.83 |
+| Mean latency | 3.5 s | 3.3 s |
+
+Three cases flipped (`Q07` fixed, `Q16` and `Q19` newly failed), and the net was a regression, not
+an improvement — even though the underlying bug description ("AND on a sentence returns nothing")
+is real and the fix is more correct in isolation. Reading the two newly-broken cases: both are
+retrieval drawing in one additional document that the dense ranker alone had kept below the fused
+chunks the model saw, after the OR query widened the candidate set. **The change was not merged.**
+This is deliberately not a silent cut: the code lived on a separate, discarded branch rather than
+`main`, and is recorded here instead of claimed as a win, because "a bug exists" and "fixing it in
+isolation improves the system" are different claims, and only the second one needs a regression
+measurement before it ships. A/B retrieval changes in this project are evaluated end to end before
+merging, not reasoned about from the query alone — this is the concrete instance of that rule.
+
 **What it does not cover.** It checks numeric claims only. A qualitative contradiction (one
 document says a step is required, another says it is optional) is not detected. Because this
 was tuned on the same 35 cases it is evaluated on, the 100% figure is optimistic and should be
